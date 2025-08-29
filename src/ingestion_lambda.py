@@ -5,6 +5,9 @@ import psycopg2
 import pandas as pd
 import logging
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 def get_secret() -> dict:
     secret_name = "Project"
     region_name = "eu-west-2"
@@ -90,7 +93,7 @@ def connect_to_s3():
         print(f'Table {table} updated into S3')
 
 def ingestion_lambda_handler(event, context):
-    logging.info("Lambda ingestion job started")
+    logger.info("Lambda ingestion job started")
     try:
         connect_to_s3()
         return {
@@ -98,7 +101,7 @@ def ingestion_lambda_handler(event, context):
             "body": json.dumps("Ingestion completed successfully")
         }
     except Exception as e:
-        logging.error(f"Lambda ingestion failed: {e}")
+        logger.error(f"Lambda ingestion failed: {e}")
         return {
             "statusCode": 500,
             "body": json.dumps(f"Error: {str(e)}")

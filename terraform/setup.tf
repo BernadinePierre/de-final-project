@@ -44,6 +44,11 @@ resource "aws_s3_object" "ingestion_lambda" {
     source = local.ingest_lambda_zip
 }
 
+resource "aws_cloudwatch_log_group" "ingestion_lambda_logs" {
+    name = "crigglestone/ingestion/standard_logs"
+    retention_in_days = 14
+}
+
 resource "aws_lambda_function" "ingestion" {
     function_name = "ingestion_lambda"
     role          = aws_iam_role.ingest_lambda.arn
@@ -56,6 +61,13 @@ resource "aws_lambda_function" "ingestion" {
     layers = [
         aws_lambda_layer_version.lambda_layer.arn
     ]
+
+    logging_config {
+        log_format = "Text"
+        log_group = aws_cloudwatch_log_group.ingestion_lambda_logs.name
+    }
+
+    depends_on = [aws_cloudwatch_log_group.ingestion_lambda_logs]
     
     timeout     = 60
     memory_size = 512
