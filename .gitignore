@@ -1,5 +1,5 @@
 venv
 **pycache**
 .terraform*
-/package
-/layers
+terraform/lambdas
+terraform/libraries
