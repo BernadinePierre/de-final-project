@@ -34,3 +34,8 @@ resource "aws_iam_role_policy_attachment" "ingest_lambda_secrets_policy_attachem
     role = aws_iam_role.ingest_lambda.name
     policy_arn = aws_iam_policy.secrets_policy.arn
 }
+
+resource "aws_iam_role_policy_attachment" "ingest_lambda_data_updates_policy_attachement" {
+    role = aws_iam_role.ingest_lambda.name
+    policy_arn = aws_iam_policy.s3_data_updates_policy.arn
+}

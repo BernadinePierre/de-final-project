@@ -33,6 +33,27 @@ resource "aws_iam_policy" "secrets_policy" {
     policy = data.aws_iam_policy_document.secrets_document.json
 }
 
+# --- LAMBDA BUCKET POLICIES ---
+
+data "aws_iam_policy_document" "s3_data_updates_document" {
+    statement {
+        actions = ["s3:ListBucket"]
+
+        resources = ["${aws_s3_bucket.lambda_bucket.arn}"]
+    }
+    
+    statement {
+        actions = ["s3:*"]
+
+        resources = ["${aws_s3_bucket.lambda_bucket.arn}/*",]
+    }
+}
+
+resource "aws_iam_policy" "s3_data_updates_policy" {
+    name = "s3-data-updates-policy"
+    policy = data.aws_iam_policy_document.s3_data_updates_document.json
+}
+
 # --- INGEST POLICIES ---
 
 data "aws_iam_policy_document" "s3_ingest_document" {
