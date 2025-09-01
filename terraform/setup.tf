@@ -42,6 +42,7 @@ resource "aws_s3_object" "ingestion_lambda" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "lambda/${local.ingest_lambda_file}.zip"
     source = local.ingest_lambda_zip
+    etag = filemd5(local.ingest_lambda_zip)
 }
 
 resource "aws_cloudwatch_log_group" "ingestion_lambda_logs" {
@@ -52,11 +53,12 @@ resource "aws_cloudwatch_log_group" "ingestion_lambda_logs" {
 resource "aws_lambda_function" "ingestion" {
     function_name = local.ingest_lambda_file
     role          = aws_iam_role.ingest_lambda.arn
-    handler       = "${local.ingest_lambda_file}.ingestion_lambda_handler"
+    handler       = "${local.ingest_lambda_file}.lambda_handler"
     runtime       = var.python_version
 
     s3_bucket = aws_s3_bucket.lambda_bucket.bucket
     s3_key    = aws_s3_object.ingestion_lambda.key
+    source_code_hash = data.archive_file.ingest_lambda_zip.output_base64sha256
 
     layers = [aws_lambda_layer_version.lambda_layer.arn]
 
@@ -64,6 +66,8 @@ resource "aws_lambda_function" "ingestion" {
         log_format = "Text"
         log_group = aws_cloudwatch_log_group.ingestion_lambda_logs.name
     }
+
+    timeout = 60
 }
 
 # --- PROCESS LAMBDA ---
@@ -78,6 +82,7 @@ resource "aws_s3_object" "process_lambda" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "lambda/${local.process_lambda_file}.zip"
     source = local.process_lambda_zip
+    etag = filemd5(local.process_lambda_zip)
 }
 
 resource "aws_cloudwatch_log_group" "process_lambda_logs" {
@@ -93,6 +98,7 @@ resource "aws_lambda_function" "processing" {
 
     s3_bucket = aws_s3_bucket.lambda_bucket.bucket
     s3_key    = aws_s3_object.process_lambda.key
+    source_code_hash = data.archive_file.process_lambda_zip.output_base64sha256
 
     layers = [aws_lambda_layer_version.lambda_layer.arn]
 
@@ -114,6 +120,7 @@ resource "aws_s3_object" "warehouse_lambda" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "lambda/${local.warehouse_lambda_file}.zip"
     source = local.warehouse_lambda_zip
+    etag = filemd5(local.warehouse_lambda_zip)
 }
 
 resource "aws_cloudwatch_log_group" "warehouse_lambda_logs" {
@@ -129,6 +136,7 @@ resource "aws_lambda_function" "warehousing" {
 
     s3_bucket = aws_s3_bucket.lambda_bucket.bucket
     s3_key    = aws_s3_object.warehouse_lambda.key
+    source_code_hash = data.archive_file.warehouse_lambda_zip.output_base64sha256
 
     layers = [aws_lambda_layer_version.lambda_layer.arn]
 
