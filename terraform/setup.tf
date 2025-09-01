@@ -24,7 +24,7 @@ resource "aws_s3_object" "lambda_layer" {
 
 resource "aws_lambda_layer_version" "lambda_layer" {
     layer_name = "lambda-layer"
-    compatible_runtimes = ["python3.13"]
+    compatible_runtimes = [var.python_version]
 
     s3_bucket = aws_s3_bucket.lambda_bucket.bucket
     s3_key = aws_s3_object.lambda_layer.key
@@ -40,7 +40,7 @@ data "archive_file" "ingest_lambda_zip" {
 
 resource "aws_s3_object" "ingestion_lambda" {
     bucket = aws_s3_bucket.lambda_bucket.id
-    key = "lambda/ingestion_lambda.zip"
+    key = "lambda/${local.ingest_lambda_file}.zip"
     source = local.ingest_lambda_zip
 }
 
@@ -50,25 +50,90 @@ resource "aws_cloudwatch_log_group" "ingestion_lambda_logs" {
 }
 
 resource "aws_lambda_function" "ingestion" {
-    function_name = "ingestion_lambda"
+    function_name = local.ingest_lambda_file
     role          = aws_iam_role.ingest_lambda.arn
-    handler       = "ingestion_lambda.ingestion_lambda_handler"
-    runtime       = "python3.13"
+    handler       = "${local.ingest_lambda_file}.ingestion_lambda_handler"
+    runtime       = var.python_version
 
     s3_bucket = aws_s3_bucket.lambda_bucket.bucket
     s3_key    = aws_s3_object.ingestion_lambda.key
 
-    layers = [
-        aws_lambda_layer_version.lambda_layer.arn
-    ]
+    layers = [aws_lambda_layer_version.lambda_layer.arn]
 
     logging_config {
         log_format = "Text"
         log_group = aws_cloudwatch_log_group.ingestion_lambda_logs.name
     }
+}
 
-    depends_on = [aws_cloudwatch_log_group.ingestion_lambda_logs]
-    
-    timeout     = 60
-    memory_size = 512
+# --- PROCESS LAMBDA ---
+
+data "archive_file" "process_lambda_zip" {
+    source_file = local.process_lambda_script
+    output_path = local.process_lambda_zip
+    type = "zip"
+}
+
+resource "aws_s3_object" "process_lambda" {
+    bucket = aws_s3_bucket.lambda_bucket.id
+    key = "lambda/${local.process_lambda_file}.zip"
+    source = local.process_lambda_zip
+}
+
+resource "aws_cloudwatch_log_group" "process_lambda_logs" {
+    name = "crigglestone/process/standard_logs"
+    retention_in_days = 14
+}
+
+resource "aws_lambda_function" "processing" {
+    function_name = local.process_lambda_file
+    role          = aws_iam_role.process_lambda.arn
+    handler       = "${local.process_lambda_file}.lambda_handler"
+    runtime       = var.python_version
+
+    s3_bucket = aws_s3_bucket.lambda_bucket.bucket
+    s3_key    = aws_s3_object.process_lambda.key
+
+    layers = [aws_lambda_layer_version.lambda_layer.arn]
+
+    logging_config {
+        log_format = "Text"
+        log_group  = aws_cloudwatch_log_group.process_lambda_logs.name
+    }
+}
+
+# --- WAREHOUSE LAMBDA ---
+
+data "archive_file" "warehouse_lambda_zip" {
+    source_file = local.warehouse_lambda_script
+    output_path = local.warehouse_lambda_zip
+    type = "zip"
+}
+
+resource "aws_s3_object" "warehouse_lambda" {
+    bucket = aws_s3_bucket.lambda_bucket.id
+    key = "lambda/${local.warehouse_lambda_file}.zip"
+    source = local.warehouse_lambda_zip
+}
+
+resource "aws_cloudwatch_log_group" "warehouse_lambda_logs" {
+    name = "crigglestone/warehouse/standard_logs"
+    retention_in_days = 14
+}
+
+resource "aws_lambda_function" "warehousing" {
+    function_name = local.warehouse_lambda_file
+    role          = aws_iam_role.warehouse_lambda.arn
+    handler       = "${local.warehouse_lambda_file}.lambda_handler"
+    runtime       = var.python_version
+
+    s3_bucket = aws_s3_bucket.lambda_bucket.bucket
+    s3_key    = aws_s3_object.warehouse_lambda.key
+
+    layers = [aws_lambda_layer_version.lambda_layer.arn]
+
+    logging_config {
+        log_format = "Text"
+        log_group  = aws_cloudwatch_log_group.warehouse_lambda_logs.name
+    }
 }

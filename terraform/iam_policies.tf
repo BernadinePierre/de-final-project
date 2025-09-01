@@ -45,7 +45,64 @@ data "aws_iam_policy_document" "s3_ingest_document" {
     }
 }
 
+data "aws_iam_policy_document" "s3_ingest_readonly_document" {
+    statement {
+        actions = [
+            "s3:Get*",
+            "s3:List*",
+            "s3:Describe*",
+            "s3-object-lambda:Get*",
+            "s3-object-lambda:List*"
+        ]
+
+        resources = [
+            "${aws_s3_bucket.ingest_bucket.arn}/*"
+        ]
+    }
+}
+
 resource "aws_iam_policy" "s3_ingest_policy" {
     name = "s3-ingest-policy"
     policy = data.aws_iam_policy_document.s3_ingest_document.json
 }
+
+resource "aws_iam_policy" "s3_ingest_readonly_policy" {
+    name = "s3-ingest-readonly-policy"
+    policy = data.aws_iam_policy_document.s3_ingest_readonly_document.json
+}
+
+# --- PROCESS POLICIES ---
+
+data "aws_iam_policy_document" "s3_process_document" {
+    statement {
+        actions = ["s3:*"]
+
+        resources = ["${aws_s3_bucket.processed_bucket.arn}/*"]
+    }
+}
+
+data "aws_iam_policy_document" "s3_process_readonly_document" {
+    statement {
+        actions = [
+            "s3:Get*",
+            "s3:List*",
+            "s3:Describe*",
+            "s3-object-lambda:Get*",
+            "s3-object-lambda:List*"
+        ]
+
+        resources = ["${aws_s3_bucket.processed_bucket.arn}/*"]
+    }
+}
+
+resource "aws_iam_policy" "s3_process_policy" {
+    name = "s3-process-policy"
+    policy = data.aws_iam_policy_document.s3_process_document.json
+}
+
+resource "aws_iam_policy" "s3_process_readonly_policy" {
+    name = "s3-process-readonly-policy"
+    policy = data.aws_iam_policy_document.s3_process_readonly_document.json
+}
+
+# --- WAREHOUSE POLICIES ---
