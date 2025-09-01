@@ -16,6 +16,12 @@ resource "aws_s3_bucket" "processed_bucket" {
 
 # --- LAMBDA LAYER ---
 
+data "archive_file" "lambda_layer_zip" {
+    source_dir = "${path.module}/libraries/source"
+    output_path = local.lambda_layer
+    type = "zip"
+}
+
 resource "aws_s3_object" "lambda_layer" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "layers/lambda_layer.zip"

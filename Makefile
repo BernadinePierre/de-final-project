@@ -38,17 +38,12 @@ create-folders:
 	@echo ">>> Creating folders for lambda files"
 	@-mkdir terraform/lambdas
 	@-mkdir terraform/libraries
-	@-mkdir terraform/libraries/python
+	@-mkdir terraform/libraries/source
+	@-mkdir terraform/libraries/source/python
 
 create-library:
 	@echo ">>> Creating lambda layer"
-	@$(call execute_in_env, $(PIP) install --target ./terraform/libraries/python -r requirements.txt)
-
-zip-library:
-	@echo ">>> Zipping lambda layer"
-	@sudo apt-get install zip
-	@cd ./terraform/libraries; \
-	zip -r ./layer.zip ./python
+	@$(call execute_in_env, $(PIP) install --target ./terraform/libraries/source/python -r requirements.txt)
 
 init-terraform:
 	@echo ">>> Initialising Terraform"
@@ -56,4 +51,4 @@ init-terraform:
 	echo ">> Working in $(pwd)"; \
 	terraform init; \
 
-setup-terraform: create-folders create-library zip-library init-terraform
+setup-terraform: create-folders create-library init-terraform
