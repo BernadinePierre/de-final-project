@@ -44,25 +44,41 @@ def connect_to_original_database():
         cur = conn.cursor()
         return cur
     except Exception as e:
-        print(f'Database connection failed due to {e}')
+        logger.warning(f'Database connection failed due to {e}')
 
 
-def check_original_update(table_name):
-    connection = connect_to_original_database()
+def check_original_update(table_name, connection):
+    logger.info(f'Getting last update')
     query = f'SELECT last_updated FROM {table_name} ORDER BY last_updated DESC LIMIT 1'
     connection.execute(query)
-    return connection.fetchall()[0][0].strftime(r'%Y-%m-%d')
-    # print(f'Table <{table}> was last updated at:\n{result[0][0].strftime(r'%Y-%m-%d')}')
+    last_update = connection.fetchall()[0][0].strftime(r'%Y-%m-%d')
+    logger.info(f'Table {table_name} last updated at {last_update}')
+    return last_update
 
 
-def get_original_updates(table_name):
-    connection = connect_to_original_database()
-    query = f'SELECT * FROM {table_name} LIMIT 5'
+def get_original_updates(table_name, connection):
+    logger.info(f'Getting updated data')
+    query = f'SELECT COUNT(last_updated) FROM {table_name}'
     connection.execute(query)
     return [col[0] for col in connection.description], connection.fetchall()
 
 
-def connect_to_s3():
+def put_in_s3(table, data, date, client):
+    logger.info('Putting data into S3')
+    client.put_object(
+        Bucket='nc-crigglestone-ingest-bucket',
+        Key=f'{table}/{date}.csv',
+        Body=data.to_csv(index=False)
+    )
+    logger.info(f'Table {table} updated into S3')
+
+
+def lambda_handler(event, context):
+    logger.info("Lambda ingestion job started")
+
+    connection = connect_to_original_database()
+    s3_client = boto3.client('s3')
+
     table_list = [
         'address',
         'counterparty',
@@ -76,33 +92,12 @@ def connect_to_s3():
         'staff',
         'transaction'
     ]
-    s3_client = boto3.client('s3')
+
     for table in table_list:
-        date = check_original_update(table)
-        # TODO
-        # check here whether we need to update or can move on
-        # or create a minimised list of tables to loop over before
+        logger.info(f'Starting table {table}')
+        date = check_original_update(table, connection)
 
-        columns, data = get_original_updates(table)
+        columns, data = get_original_updates(table, connection)
         data = pd.DataFrame(data, columns=columns)
-        s3_client.put_object(
-            Bucket='nc-crigglestone-ingest-bucket',
-            Key=f'{table}/{date}.csv',
-            Body=data.to_csv(index=False)
-        )
-        print(f'Table {table} updated into S3')
 
-def ingestion_lambda_handler(event, context):
-    logger.info("Lambda ingestion job started")
-    try:
-        connect_to_s3()
-        return {
-            "statusCode": 200,
-            "body": json.dumps("Ingestion completed successfully")
-        }
-    except Exception as e:
-        logger.error(f"Lambda ingestion failed: {e}")
-        return {
-            "statusCode": 500,
-            "body": json.dumps(f"Error: {str(e)}")
-        }
+        put_in_s3(table, data, date, s3_client)
