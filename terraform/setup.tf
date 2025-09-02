@@ -25,7 +25,7 @@ data "archive_file" "lambda_layer_zip" {
 resource "aws_s3_object" "lambda_layer" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "layers/lambda_layer.zip"
-    source = local.lambda_layer
+    source = data.archive_file.lambda_layer_zip.output_path
 }
 
 resource "aws_lambda_layer_version" "lambda_layer" {
@@ -88,7 +88,7 @@ data "archive_file" "process_lambda_zip" {
 resource "aws_s3_object" "process_lambda" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "lambda/${local.process_lambda_file}.zip"
-    source = local.process_lambda_zip
+    source = data.archive_file.process_lambda_zip.output_path
     etag = filemd5(local.process_lambda_zip)
 }
 
@@ -126,7 +126,7 @@ data "archive_file" "warehouse_lambda_zip" {
 resource "aws_s3_object" "warehouse_lambda" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "lambda/${local.warehouse_lambda_file}.zip"
-    source = local.warehouse_lambda_zip
+    source = data.archive_file.warehouse_lambda_zip.output_path
     etag = filemd5(local.warehouse_lambda_zip)
 }
 
