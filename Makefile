@@ -5,7 +5,7 @@
 ###################################################
 
 REGION = eu-west-2
-PYTHON_INTERPRETER = PYTHON_INTERPRETER
+PYTHON_INTERPRETER = python3
 WD = $(shell pwd)
 PYTHONPATH = $(pwd)
 SHELL := /bin/bash
@@ -17,7 +17,7 @@ PIP := pip
 create-environment:
 	@echo ">>> Setting up venv"
 	( \
-		$(PYTHON_INTERPRETER) - m venv venv; \
+		$(PYTHON_INTERPRETER) -m venv venv; \
 	)
 
 ACTIVATE_ENV := source venv/bin/activate
@@ -29,8 +29,7 @@ endef
 build-requirements:
 	$(call execute_in_env, $(PIP) install -r ./requirements.txt)
 
-make-build:
-	create-environment build-requirements
+make-build: create-environment build-requirements
 
 # Set up files for lambda
 
