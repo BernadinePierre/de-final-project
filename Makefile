@@ -17,7 +17,7 @@ PIP := pip
 create-environment:
 	@echo ">>> Setting up venv"
 	( \
-		$(PYTHON_INTERPRETER) - m venv venv; \
+		$(PYTHON_INTERPRETER) -m venv venv; \
 	)
 
 ACTIVATE_ENV := source venv/bin/activate
