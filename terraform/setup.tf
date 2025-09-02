@@ -49,7 +49,7 @@ resource "aws_s3_object" "ingestion_lambda" {
     key = "lambda/${local.ingest_lambda_file}.zip"
     # source = local.ingest_lambda_zip
     source = data.archive_file.ingest_lambda_zip.output_path
-    etag = filemd5(local.ingest_lambda_zip)
+    etag = filemd5(data.archive_file.ingest_lambda_zip.output_path)
 }
 
 resource "aws_cloudwatch_log_group" "ingestion_lambda_logs" {
@@ -89,7 +89,7 @@ resource "aws_s3_object" "process_lambda" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "lambda/${local.process_lambda_file}.zip"
     source = data.archive_file.process_lambda_zip.output_path
-    etag = filemd5(local.process_lambda_zip)
+    etag = filemd5(data.archive_file.process_lambda_zip.output_path)
 }
 
 resource "aws_cloudwatch_log_group" "process_lambda_logs" {
@@ -127,7 +127,7 @@ resource "aws_s3_object" "warehouse_lambda" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "lambda/${local.warehouse_lambda_file}.zip"
     source = data.archive_file.warehouse_lambda_zip.output_path
-    etag = filemd5(local.warehouse_lambda_zip)
+    etag = filemd5(data.archive_file.warehouse_lambda_zip.output_path)
 }
 
 resource "aws_cloudwatch_log_group" "warehouse_lambda_logs" {
