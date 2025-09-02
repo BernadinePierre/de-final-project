@@ -6,7 +6,7 @@ resource "aws_scheduler_schedule" "ingest_scheduler" {
         mode = "OFF"
     }
 
-    schedule_expression = "rate(5 minutes)"
+    schedule_expression = "rate(20 minutes)"
 
     target {
         arn = aws_lambda_function.ingestion.arn
