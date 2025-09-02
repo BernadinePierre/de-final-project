@@ -47,7 +47,8 @@ data "archive_file" "ingest_lambda_zip" {
 resource "aws_s3_object" "ingestion_lambda" {
     bucket = aws_s3_bucket.lambda_bucket.id
     key = "lambda/${local.ingest_lambda_file}.zip"
-    source = local.ingest_lambda_zip
+    # source = local.ingest_lambda_zip
+    source = data.archive_file.ingest_lambda_zip.output_path
     etag = filemd5(local.ingest_lambda_zip)
 }
 
