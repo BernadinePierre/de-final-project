@@ -132,7 +132,7 @@ resource "aws_s3_object" "warehouse_lambda" {
 
 resource "aws_cloudwatch_log_group" "warehouse_lambda_logs" {
     name = "crigglestone/warehouse/standard_logs"
-    retention_in_days = 14
+    retention_in_days = 14 
 }
 
 resource "aws_lambda_function" "warehousing" {
@@ -146,6 +146,14 @@ resource "aws_lambda_function" "warehousing" {
     source_code_hash = data.archive_file.warehouse_lambda_zip.output_base64sha256
 
     layers = [aws_lambda_layer_version.lambda_layer.arn]
+
+    vpc_config {
+        subnet_ids = [
+            aws_subnet.private_a.id, 
+            aws_subnet.private_b.id
+        ]
+        security_group_ids = [aws_security_group.lambda_sg.id]
+    }
 
     logging_config {
         log_format = "Text"

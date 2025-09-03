@@ -127,3 +127,13 @@ resource "aws_iam_policy" "s3_process_readonly_policy" {
 }
 
 # --- WAREHOUSE POLICIES ---
+
+resource "aws_iam_role_policy_attachment" "lambda_s3_access" {
+  role       = aws_iam_role.warehouse_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_rds_access" {
+  role       = aws_iam_role.warehouse_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonRDSFullAccess"
+}
