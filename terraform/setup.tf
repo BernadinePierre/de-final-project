@@ -113,6 +113,8 @@ resource "aws_lambda_function" "processing" {
         log_format = "Text"
         log_group  = aws_cloudwatch_log_group.process_lambda_logs.name
     }
+
+    timeout = 60
 }
 
 # --- WAREHOUSE LAMBDA ---
@@ -159,4 +161,6 @@ resource "aws_lambda_function" "warehousing" {
         log_format = "Text"
         log_group  = aws_cloudwatch_log_group.warehouse_lambda_logs.name
     }
+
+    timeout = 60
 }

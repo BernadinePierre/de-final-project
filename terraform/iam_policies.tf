@@ -33,6 +33,26 @@ resource "aws_iam_policy" "secrets_policy" {
     policy = data.aws_iam_policy_document.secrets_document.json
 }
 
+data "aws_iam_policy_document" "warehouse_secrets" {
+  statement {
+    actions = ["secretsmanager:GetSecretValue"]
+    
+    resources = [
+      "arn:aws:secretsmanager:eu-west-2:150327910081:secret:warehouse-db-credentials*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "warehouse_secrets_policy" {
+  name   = "warehouse_lambda_secrets"
+  policy = data.aws_iam_policy_document.warehouse_secrets.json
+}
+
+resource "aws_iam_role_policy_attachment" "warehouse_lambda_attach_secrets" {
+  role       = aws_iam_role.warehouse_lambda.name
+  policy_arn = aws_iam_policy.warehouse_secrets_policy.arn
+}
+
 # --- LAMBDA BUCKET POLICIES ---
 
 data "aws_iam_policy_document" "s3_data_updates_document" {
