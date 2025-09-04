@@ -72,8 +72,10 @@ resource "aws_db_instance" "warehouse" {
   instance_class         = "db.t3.micro"
   allocated_storage      = 25
   db_name                = "warehouse"
-  username               = "Group_Project"
-  password               = "September2025"
+
+  username               = var.warehouse_username
+  password               = var.warehouse_password
+
   vpc_security_group_ids = [aws_security_group.warehouse_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.warehouse-subnet-group.name
   publicly_accessible    = false

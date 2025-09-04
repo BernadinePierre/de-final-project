@@ -157,3 +157,5 @@ resource "aws_iam_role_policy_attachment" "lambda_rds_access" {
   role       = aws_iam_role.warehouse_lambda.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonRDSFullAccess"
 }
+
+

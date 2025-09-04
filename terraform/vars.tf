@@ -12,9 +12,13 @@ locals {
     warehouse_lambda_file   = "warehousing_lambda"
     warehouse_lambda_script = "${path.module}/../src/${local.warehouse_lambda_file}.py"
     warehouse_lambda_zip    = "${path.module}/lambdas/${local.warehouse_lambda_file}.zip"
+
 }
 
 variable "python_version" {
     type = string
     default = "python3.13"
 }
+
+variable "warehouse_username" {}
+variable "warehouse_password" {sensitive = true}
