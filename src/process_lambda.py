@@ -273,10 +273,103 @@ def make_fact_payment(payment, date):
 
     dates = ps.sqldf(date_query, {'date': date})
     dates['full_date'] = pd.to_datetime(dates['full_date']).dt.date
-    logger.info(dates)
     processed_payment = ps.sqldf(main_query, {'payment': payment, 'dates': dates})
     processed_payment.insert(0, 'record_payment_id', range(1, len(processed_payment)+1))
     return processed_payment
+
+
+def make_fact_purchase_order(purchases, date):
+    purchases['created_at'] = pd.to_datetime(purchases['created_at'])
+    purchases['last_updated'] = pd.to_datetime(purchases['last_updated'])
+    purchases['agreed_delivery_date'] = pd.to_datetime(purchases['agreed_delivery_date']).dt.date
+    purchases['agreed_payment_date'] = pd.to_datetime(purchases['agreed_payment_date']).dt.date
+
+    purchases['created_date'] = purchases['created_at'].dt.date
+    purchases['created_time'] = purchases['created_at'].dt.time
+
+    purchases['last_updated_date'] = purchases['last_updated'].dt.date
+    purchases['last_updated_time'] = purchases['last_updated'].dt.time
+
+    date_query = """SELECT
+        date_id,
+        year || '-' || month || '-' || day AS full_date
+    FROM date
+    """
+
+    main_query = """SELECT
+        purchase_order_id,
+        c.date_id AS created_date,
+        created_time,
+        u.date_id AS last_updated_date,
+        last_updated_time,
+        staff_id,
+        counterparty_id,
+        item_code,
+        item_quantity,
+        item_unit_price,
+        currency_id,
+        d.date_id AS agreed_delivery_date,
+        p.date_id AS agreed_payment_date,
+        agreed_delivery_location_id
+    FROM purchases
+    LEFT JOIN dates c ON purchases.created_date = c.full_date
+    LEFT JOIN dates u ON purchases.last_updated_date = u.full_date
+    LEFT JOIN dates d ON purchases.agreed_delivery_date = d.full_date
+    LEFT JOIN dates p ON purchases.agreed_payment_date = p.full_date
+    """
+
+    dates = ps.sqldf(date_query, {'date': date})
+    dates['full_date'] = pd.to_datetime(dates['full_date']).dt.date
+    processed_purchases = ps.sqldf(main_query, {'purchases': purchases, 'dates': dates})
+    processed_purchases.insert(0, 'purchase_record_id', range(1, len(processed_purchases)+1))
+    return processed_purchases
+
+
+def make_fact_sales_order(sales, date):
+    sales['created_at'] = pd.to_datetime(sales['created_at'])
+    sales['last_updated'] = pd.to_datetime(sales['last_updated'])
+    sales['agreed_payment_date'] = pd.to_datetime(sales['agreed_payment_date']).dt.date
+    sales['agreed_delivery_date'] = pd.to_datetime(sales['agreed_delivery_date']).dt.date
+
+    sales['created_date'] = sales['created_at'].dt.date
+    sales['created_time'] = sales['created_at'].dt.time
+
+    sales['last_updated_date'] = sales['last_updated'].dt.date
+    sales['last_updated_time'] = sales['last_updated'].dt.time
+
+    date_query = """SELECT
+        date_id,
+        year || '-' || month || '-' || day AS full_date
+    FROM date
+    """
+
+    main_query = """SELECT
+        sales_order_id,
+        c.date_id AS created_date,
+        created_time,
+        u.date_id AS last_updated_date,
+        last_updated_time,
+        staff_id AS sales_staff_id,
+        counterparty_id,
+        units_sold,
+        unit_price,
+        currency_id,
+        design_id,
+        p.date_id AS agreed_payment_date,
+        d.date_id AS agreed_delivery_date,
+        agreed_delivery_location_id
+    FROM sales
+    LEFT JOIN dates c ON sales.created_date = c.full_date
+    LEFT JOIN dates u ON sales.last_updated_date = u.full_date
+    LEFT JOIN dates p ON sales.agreed_payment_date = p.full_date
+    LEFT JOIN dates d ON sales.agreed_delivery_date = d.full_date
+    """
+
+    dates = ps.sqldf(date_query, {'date': date})
+    dates['full_date'] = pd.to_datetime(dates['full_date']).dt.date
+    processed_sales = ps.sqldf(main_query, {'sales': sales, 'dates': dates})
+    processed_sales.insert(0, 'sales_record_id', range(1, len(processed_sales)+1))
+    return processed_sales
 
 
 # {'updates': {'datetime': '2025-09-04 13:37', 'tables': ['currency', 'payment']}}
@@ -302,11 +395,14 @@ def lambda_handler(event, context):
     dimensions['dim_transaction'] = make_dim_transaction(s3_client)
 
     facts['payment'] = make_fact_payment(payment, dimensions['dim_date'])
-
-    logger.info(facts['payment'])
+    facts['purchase_order'] = make_fact_purchase_order(purchase_order, dimensions['dim_date'])
+    facts['sales_order'] = make_fact_sales_order(sales_order, dimensions['dim_date'])
 
     for table in dimensions.keys():
         put_in_processed(s3_client, table, dimensions[table])
+
+    for table in facts.keys():
+        put_in_processed(s3_client, table, facts[table])
 
 
 if __name__ == '__main__':
