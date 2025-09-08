@@ -18,3 +18,6 @@ variable "python_version" {
     type = string
     default = "python3.13"
 }
+
+variable "warehouse_username" {}
+variable "warehouse_password" {sensitive = true}
