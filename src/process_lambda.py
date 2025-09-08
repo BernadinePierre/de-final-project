@@ -403,8 +403,3 @@ def lambda_handler(event, context):
 
     for table in facts.keys():
         put_in_processed(s3_client, table, facts[table])
-
-
-if __name__ == '__main__':
-    logging.getLogger().addHandler(logging.StreamHandler())
-    lambda_handler({}, {})
