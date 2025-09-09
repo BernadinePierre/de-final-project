@@ -1,7 +1,6 @@
 import boto3
 from botocore.exceptions import ClientError
 import pandas as pd
-import pandasql as ps
 import logging
 from io import StringIO, BytesIO
 
@@ -23,6 +22,20 @@ STARTING_TABLES = [
     'staff',
     'transaction'
 ]
+
+
+TABLES = {
+    'dim_counterparty': 'counterparty',
+    'dim_currency': 'currency',
+    'dim_design': 'design',
+    'dim_location': 'address',
+    'dim_payment_type': 'payment_type',
+    'dim_staff': 'staff',
+    'dim_transaction': 'transaction',
+    'fact_payment': 'payment',
+    'fact_purchase_order': 'purchase_order',
+    'fact_sales_order': 'sales_order'
+}
 
 
 def fetch_file_from_ingest(client, key):
@@ -61,7 +74,7 @@ def put_in_processed(client, table_name, data):
     parqueted = data.to_parquet()
     client.put_object(
         Bucket='nc-crigglestone-processed-bucket',
-        Key=f'processed-{table_name.replace('_', '-')}.parquet',
+        Key=f'{table_name.replace('_', '-')}.parquet',
         Body=parqueted
     )
 
@@ -102,14 +115,26 @@ def get_data(client, table_name, updated_time=None) -> dict[str, pd.DataFrame]:
     return {'processed': stored, 'ingested': update_data}
 
 
-def make_dim_location(client, updated_time):
-    logger.info('Creating dim_location')
+def make_dimension(client, table_name, updated_time, transformation_function):
+    logger.info(f'Creating {table_name}')
 
-    address = get_from_ingest(client, 'address')
-    address.drop_duplicates(subset=['address_id'], keep='last', inplace=True)
+    total_data = get_data(client, table_name, updated_time)
 
+    if table_name in ['dim_counterparty', 'dim_staff']:
+        new_data = transformation_function(total_data['ingested'], client)
+    else:
+        new_data = transformation_function(total_data['ingested'])
+
+    if total_data['processed'] is not None:
+        previous = total_data['processed']
+        new_data = pd.concat([previous, new_data], axis=0)
+    
+    new_data.drop_duplicates(subset=[TABLES[table_name]['primary_key']], keep='last', inplace=True)
+    put_in_processed(client, table_name, new_data)
+
+
+def transform_location(address):
     address.rename(columns={'address_id': 'location_id'}, inplace=True)
-
     return address[[
         'location_id',
         'address_line_1',
@@ -122,15 +147,9 @@ def make_dim_location(client, updated_time):
     ]]
 
 
-def make_dim_counterparty(client):
-    logger.info('Creating dim_counterparty')
-
-    counterparty = get_from_ingest(client, 'counterparty')
-    counterparty.drop_duplicates(subset=['counterparty_id'], keep='last', inplace=True)
-
-    address = get_from_ingest(client, 'address')
-    address.drop_duplicates(subset=['address_id'], keep='last', inplace=True)
-    address.rename(columns={'address_id': 'legal_address_id'}, inplace=True)
+def transform_counterparty(counterparty, client):
+    address = get_data(client, 'dim_location')['processed']
+    address.rename(columns={'location_id': 'legal_address_id'}, inplace=True)
 
     dim_counterparty = counterparty.join(address, on='legal_address_id', rsuffix='_address')
     dim_counterparty.rename(
@@ -145,6 +164,7 @@ def make_dim_counterparty(client):
         },
         inplace=True
     )
+
     return dim_counterparty[[
         'counterparty_id',
         'counterparty_legal_name',
@@ -158,31 +178,16 @@ def make_dim_counterparty(client):
     ]]
 
 
-def make_dim_currency(client):
+def transform_currency(currency):
     # TODO Add currency_name
-    logger.info('Creating dim_currency')
-
-    currency = get_from_ingest(client, 'currency')
-    currency.drop_duplicates(subset=['currency_id'], keep='last', inplace=True)
-
     return currency[['currency_id', 'currency_code']]
 
 
-def make_dim_design(client):
-    logger.info('Creating dim_design')
-
-    design = get_from_ingest(client, 'design')
-    design.drop_duplicates(subset=['design_id'], keep='last', inplace=True)
-
+def transform_design(design):
     return design[['design_id', 'design_name', 'file_location', 'file_name']]
 
 
-def make_dim_payment_type(client):
-    logger.info('Creating dim_paymet_design')
-
-    payment_type = get_from_ingest(client, 'payment_type')
-    payment_type.drop_duplicates(subset=['payment_type_id'], keep='last', inplace=True)
-
+def transform_payment_type(payment_type):
     return payment_type[['payment_type_id', 'payment_type_name']]
 
 
@@ -206,13 +211,8 @@ def make_dim_staff(client):
     ]]
 
 
-def make_dim_transaction(client):
-    logger.info('Creating dim_transaction')
-
-    transact = get_from_ingest(client, 'transaction')
-    transact.drop_duplicates(subset=['transaction_id'], keep='last', inplace=True)
-
-    return transact[[
+def transform_transaction(transaction):
+    return transaction[[
         'transaction_id',
         'transaction_type',
         'sales_order_id',
@@ -468,14 +468,29 @@ def make_fact_sales_order(sales: pd.DataFrame, date: pd.DataFrame):
     return processed_sales
 
 
-# {'updates': {'datetime': '2025-09-04 13:37', 'tables': ['currency', 'payment']}}
+# {'update_tables': ['currency', 'payment'], 'update_time': '2025-09-08 12:56'}
 def lambda_handler(event, context):
     logger.info('Starting lambda')
-
-    dimensions = {}
-    facts = {}
     
     s3_client = boto3.client('s3')
+
+    updates = context['update_tables']
+    latest_update = context['update_time']
+
+    if 'address' in updates:
+        make_dimension(s3_client, 'dim_location', latest_update, transform_location)
+    if 'counterparty' in updates:
+        make_dimension(s3_client, 'dim_counterparty', latest_update, transform_counterparty)
+    if 'currency' in updates:
+        make_dimension(s3_client, 'dim_currency', latest_update, transform_currency)
+    if 'design' in updates:
+        make_dimension(s3_client, 'dim_design', latest_update, transform_design)
+    if 'payment_type' in updates:
+        make_dimension(s3_client, 'dim_payment_type', latest_update, transform_payment_type)
+    if 'staff' in updates:
+        pass
+    if 'transaction' in updates:
+        make_dimension(s3_client, 'dim_transaction', latest_update, transform_transaction)
 
     payment = get_from_ingest(s3_client, 'payment')
     purchase_order = get_from_ingest(s3_client, 'purchase_order')
@@ -494,11 +509,6 @@ def lambda_handler(event, context):
     facts['purchase_order'] = make_fact_purchase_order(purchase_order, dimensions['dim_date'])
     facts['sales_order'] = make_fact_sales_order(sales_order, dimensions['dim_date'])
 
-    for table in dimensions.keys():
-        put_in_processed(s3_client, table, dimensions[table])
-
-    for table in facts.keys():
-        put_in_processed(s3_client, table, facts[table])
 
 if __name__ == '__main__':
     logging.getLogger().addHandler(logging.StreamHandler())
