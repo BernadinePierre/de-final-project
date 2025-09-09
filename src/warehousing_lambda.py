@@ -46,38 +46,49 @@ def connect_to_warehouse():
         raise
 
 def load_parquet_to_warehouse(key):
-    table_name = key.replace("processed-dim-", "").replace(".parquet", "")
+    table_name = (
+        key.replace("processed-dim-", "")
+        .replace("processed-fact-", "")
+        .replace(".parquet", "")
+    )
+
     logger.info(f"Loading file {key} into table {table_name}")
     
     s3_path = f"s3://{PROCESSED_BUCKET}/{key}"
     processed_data = wr.s3.read_parquet(s3_path)
+
+    # Remove extra columns that don't exist in the database
+    columns_to_remove = ['date', '__index_level_0__']
+    for col in columns_to_remove:
+        if col in processed_data.columns:
+            logger.info(f"Removing extra column: {col}")
+            processed_data = processed_data.drop(columns=[col])
+
     if processed_data.empty:
             logger.info(f"No data found in {table_name}")
             return
 
     connection = connect_to_warehouse()
-    
+
     try:
-        # Load into Postgres in batches
         wr.postgresql.to_sql(
             df=processed_data,
             table=table_name,
             con=connection,
             schema="public",        
             mode="append",     
-            chunksize=100         
+            chunksize=1000   #Loads rows into batches      
         )
 
         logger.info(f"Loaded {len(processed_data)} rows into {table_name}")
 
     except Exception as e:
-        logger.error(f"Failed to load {table_name} into {table_name}: {e}")
+        logger.error(f"Failed to load new {table_name} rows into {table_name}: {e}")
         raise
 
+# Logs the first 10 rows of every table in the 'public' schema of the warehouse
 def preview_all_tables():
-    """
-    Logs the first 10 rows of every table in the 'public' schema of the warehouse.
-    """
+
     connection = connect_to_warehouse()
     
     try:
@@ -93,9 +104,8 @@ def preview_all_tables():
             return
 
         for table in table_names:
-            logger.info(f"Previewing first 10 rows of table: {table}")
+            logger.info(f"Previewing first 10 rows of table: {table}")            
             
-            # Fetch first 10 rows
             df_preview = wr.postgresql.read_sql_query(
                 sql=f'SELECT * FROM "{table}" LIMIT 10;',
                 con=connection
@@ -104,13 +114,14 @@ def preview_all_tables():
                 logger.info(f"No data in table {table}")
             else:
                 logger.info(f"\n{df_preview.to_string(index=False)}")
-            
+            #Visual break for the logs
             logger.info("-" * 50)
         
-        for table in table_names:
-            df = wr.postgresql.read_sql_query(sql=f'SELECT * FROM "{table}"', con=connection)
-            s3_path = f"s3://nc-crigglestone-lambda-bucket/extracts/{table}.csv"
-            wr.s3.to_csv(df, path=s3_path, index=False)
+        # #Saving the warehouse extract
+        # for table in table_names:
+        #     df = wr.postgresql.read_sql_query(sql=f'SELECT * FROM "{table}"', con=connection)
+        #     s3_path = f"s3://nc-crigglestone-lambda-bucket/extracts/{table}.csv"
+        #     wr.s3.to_csv(df, path=s3_path, index=False)
 
     except Exception as e:
         logger.error(f"Failed to preview tables: {e}")
@@ -118,15 +129,65 @@ def preview_all_tables():
     finally:
         connection.close()
 
+def check_date_table_schema(table_name):
+    """Check what columns exist in the date table"""
+    connection = connect_to_warehouse()
+    
+    try:
+        schema_query = """
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = '{table_name}' AND table_schema = 'public'
+        ORDER BY ordinal_position;
+        """
+        
+        schema_df = wr.postgresql.read_sql_query(schema_query, connection)
+        logger.info("Date table columns in database:")
+        logger.info(f"\n{schema_df.to_string()}")
+        
+        return schema_df['column_name'].tolist()
+        
+    except Exception as e:
+        logger.error(f"Failed to check table schema: {e}")
+        raise
+    finally:
+        connection.close()
+
+def debug_parquet_data(key):
+    s3_path = f"s3://{PROCESSED_BUCKET}/{key}"
+    
+    try:
+        # Read the data
+        df = wr.s3.read_parquet(s3_path)
+        
+        logger.info(f"Data types in parquet file:")
+        for col, dtype in df.dtypes.items():
+            logger.info(f"  {col}: {dtype}")
+        
+        # Check what values are in date_id column
+        logger.info(f"Unique values in date_id: {df['date_id'].unique()}")
+        logger.info(f"Sample date_id values: {df['date_id'].head(10).tolist()}")
+        
+        # Check for non-numeric values
+        non_numeric = df[~df['date_id'].apply(lambda x: isinstance(x, (int, float, type(None))))]
+        if not non_numeric.empty:
+            logger.warning(f"Non-numeric values in date_id: {non_numeric['date_id'].unique()}")
+        
+    except Exception as e:
+        logger.error(f"Debug failed: {e}")
+        raise  
+
 def lambda_handler(event, context):
     logger.info("Warehouse loader started")
     try:
+        debug_parquet_data("processed-dim-date.parquet")
+        
         if 'Records' in event:
             for record in event['Records']:
                 key = record['s3']['object']['key']
                 load_parquet_to_warehouse(key)
         else:
-            # If manually triggered, optionally scan bucket for files
+            # Checks bucket for files if manually triggered
             s3_client = boto3.client("s3")
             response = s3_client.list_objects_v2(Bucket=PROCESSED_BUCKET)
             for obj in response.get('Contents', []):
@@ -137,4 +198,5 @@ def lambda_handler(event, context):
     
     except Exception as e:
         logger.error(f"Load failed: {e}")
-        return {"statusCode": 500, "body": str(e)}     
+        return {"statusCode": 500, "body": str(e)}
+
