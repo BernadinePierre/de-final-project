@@ -58,10 +58,10 @@ def get_from_ingest(client, table_name):
 
 def put_in_processed(client, table_name, data):
     logger.info(f'Putting table {table_name} into processed bucket')
-    parqueted = data.to_parquet()
+    parqueted = data.to_parquet(index=False)
     client.put_object(
         Bucket='nc-crigglestone-processed-bucket',
-        Key=f'processed-{table_name.replace('_', '-')}.parquet',
+        Key=f'{table_name.replace('_', '-')}.parquet',
         Body=parqueted
     )
 
@@ -69,7 +69,7 @@ def put_in_processed(client, table_name, data):
 def get_parquet(client, table_name):
     logger.info(f'Fetching data from processed bucket for {table_name}')
     BUCKET = 'nc-crigglestone-processed-bucket'
-    KEY = f'processed-{table_name.replace('_', '-')}.parquet'
+    KEY = f'{table_name.replace('_', '-')}.parquet'
     try:
         client.head_object(
             Bucket=BUCKET,
@@ -88,21 +88,7 @@ def get_parquet(client, table_name):
             raise
 
 
-def get_data(client, table_name, updated_time=None) -> dict[str, pd.DataFrame]:
-    logger.info(f'Getting all data for {table_name}')
-
-    stored = get_parquet(client, table_name)
-
-    update_data = None
-    if stored is None:
-        pass # get all data from ingest
-    elif updated_time is not None:
-        pass # get new data from ingest
-    
-    return {'processed': stored, 'ingested': update_data}
-
-
-def make_dim_location(client, updated_time):
+def make_dim_location(client):
     logger.info('Creating dim_location')
 
     address = get_from_ingest(client, 'address')
@@ -415,28 +401,6 @@ def make_fact_sales_order(sales: pd.DataFrame, date: pd.DataFrame):
         rsuffix='_2'
     )
 
-    main_query = """SELECT
-        sales_order_id,
-        c.date_id AS created_date,
-        created_time,
-        u.date_id AS last_updated_date,
-        last_updated_time,
-        staff_id AS sales_staff_id,
-        counterparty_id,
-        units_sold,
-        unit_price,
-        currency_id,
-        design_id,
-        p.date_id AS agreed_payment_date,
-        d.date_id AS agreed_delivery_date,
-        agreed_delivery_location_id
-    FROM sales
-    LEFT JOIN dates c ON sales.created_date = c.full_date
-    LEFT JOIN dates u ON sales.last_updated_date = u.full_date
-    LEFT JOIN dates p ON sales.agreed_payment_date = p.full_date
-    LEFT JOIN dates d ON sales.agreed_delivery_date = d.full_date
-    """
-
     processed_sales = paymented[[
         'sales_order_id',
         'c_date_id',
@@ -468,7 +432,7 @@ def make_fact_sales_order(sales: pd.DataFrame, date: pd.DataFrame):
     return processed_sales
 
 
-# {'updates': {'datetime': '2025-09-04 13:37', 'tables': ['currency', 'payment']}}
+# {'updates': ['currency', 'payment']}}
 def lambda_handler(event, context):
     logger.info('Starting lambda')
 
@@ -490,9 +454,9 @@ def lambda_handler(event, context):
     dimensions['dim_staff'] = make_dim_staff(s3_client)
     dimensions['dim_transaction'] = make_dim_transaction(s3_client)
 
-    facts['payment'] = make_fact_payment(payment, dimensions['dim_date'])
-    facts['purchase_order'] = make_fact_purchase_order(purchase_order, dimensions['dim_date'])
-    facts['sales_order'] = make_fact_sales_order(sales_order, dimensions['dim_date'])
+    facts['fact_payment'] = make_fact_payment(payment, dimensions['dim_date'])
+    facts['fact_purchase_order'] = make_fact_purchase_order(purchase_order, dimensions['dim_date'])
+    facts['fact_sales_order'] = make_fact_sales_order(sales_order, dimensions['dim_date'])
 
     for table in dimensions.keys():
         put_in_processed(s3_client, table, dimensions[table])
