@@ -1,14 +1,13 @@
+import awswrangler as wr
 import boto3
 from botocore.exceptions import ClientError
-import json
-import psycopg2
-import pandas as pd
-import logging
 from datetime import datetime
+import json
+import logging
+import pg8000
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
 
 tables = [
     'address',
@@ -119,27 +118,12 @@ TABLE_LIST = {
     ]
 }
 
-DATA_UPDATES = json.dumps({
-    "address": "0000-00-00 00:00:00.0",
-    "counterparty": "0000-00-00 00:00:00.0",
-    "currency": "0000-00-00 00:00:00.0",
-    "department": "0000-00-00 00:00:00.0",
-    "design": "0000-00-00 00:00:00.0",
-    "payment": "0000-00-00 00:00:00.0",
-    "payment_type": "0000-00-00 00:00:00.0",
-    "purchase_order": "0000-00-00 00:00:00.0",
-    "sales_order": "0000-00-00 00:00:00.0",
-    "staff": "0000-00-00 00:00:00.0",
-    "transaction": "0000-00-00 00:00:00.0"
-})
-
+DATA_UPDATES = {table: "0000-00-00 00:00:00.0" for table in TABLE_LIST.keys()}
 
 def get_secret() -> dict:
     secret_name = "Project"
     region_name = "eu-west-2"
-    # Create a Secrets Manager client
-    session = boto3.session.Session()
-    client = session.client(
+    client = boto3.client(
         service_name='secretsmanager',
         region_name=region_name
     )
@@ -148,57 +132,47 @@ def get_secret() -> dict:
             SecretId=secret_name
         )
     except ClientError as e:
-        raise e
+        raise e    
     secret = get_secret_value_response['SecretString']
-
     secret_dict = json.loads('{'+secret+'}')
     return secret_dict['crigglestone']
 
-
 def connect_to_original_database():
     database_info = get_secret()
-    
+
     try:
-        conn = psycopg2.connect(
+        conn = pg8000.connect(
             host=database_info['host'],
             port=database_info['port'],
             database=database_info['database'],
             user=database_info['user'],
-            password=database_info['password'],
-            sslrootcert='SSLCERTIFICATE'
+            password=database_info['password']
         )
-        cur = conn.cursor()
-        return cur
+        logger.info(f'Database connection successful')
+        return conn
     except Exception as e:
-        logger.warning(f'Database connection failed due to {e}')
-
+        logger.error(f'Database connection failed due to {e}')
+        raise
 
 def check_original_update(table_name, connection):
     logger.info('Getting latest update')
-    query = f'SELECT last_updated::text AS texted FROM {table_name} ORDER BY last_updated DESC LIMIT 1'
-    connection.execute(query)
-    last_update = connection.fetchall()
-    logger.info(f'Table {table_name} last updated at {last_update[0][0]}')
-    return last_update[0][0]
-
+    query = f'SELECT last_updated::text AS last_updated FROM {table_name} ORDER BY last_updated DESC LIMIT 1'
+    df = wr.postgresql.read_sql_query(sql=query, con=connection)
+    logger.info(f'Table {table_name} last updated at {df['last_updated'].iloc[0]}')
+    return df['last_updated'].iloc[0] if not df.empty else "0000-00-00 00:00:00.0"
 
 def get_original_updates(table_name, connection, cutoff):
     logger.info('Getting updated data')
     query = f"SELECT {', '.join(TABLE_LIST[table_name])} FROM {table_name} WHERE last_updated::text > '{cutoff}'"
-    connection.execute(query)
+    df = wr.postgresql.read_sql_query(sql=query, con=connection)
     logger.info('Data fetched')
-    return [col[0] for col in connection.description], connection.fetchall()
+    return df
 
-
-def put_in_s3(table, data, date, client):
+def put_in_s3(table, data, date):
     logger.info('Putting data into S3')
-    client.put_object(
-        Bucket='nc-crigglestone-ingest-bucket',
-        Key=f'{table}/{date}.csv',
-        Body=data.to_csv(index=False)
-    )
+    path = f"s3://nc-crigglestone-ingest-bucket/{table}/{date}.csv"
+    wr.s3.to_csv(df=data, path=path, index=False)
     logger.info(f'Table {table} updated into S3')
-
 
 def get_updates_table(client):
     lambda_bucket = 'nc-crigglestone-lambda-bucket'
@@ -215,7 +189,7 @@ def get_updates_table(client):
             client.put_object(
                 Bucket=lambda_bucket,
                 Key=key_name,
-                Body=DATA_UPDATES
+                Body=json.dumps(DATA_UPDATES)
             )
         else:
             raise
@@ -226,12 +200,14 @@ def get_updates_table(client):
         )
         return json.loads(updates['Body'].read().decode('utf-8'))
 
-
 def lambda_handler(event, context):
     logger.info("Lambda ingestion job started")
 
     connection = connect_to_original_database()
     s3_client = boto3.client('s3')
+    logger.info("Checking Secrets Manager connectivity")
+    s3_client.list_secrets(MaxResults=1)
+    logger.info("Secrets Manager connection successful")
 
     last_updated = get_updates_table(s3_client)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -243,10 +219,8 @@ def lambda_handler(event, context):
 
         if date > last_updated[table]:
 
-            columns, data = get_original_updates(table, connection, last_updated[table])
-            data = pd.DataFrame(data, columns=columns)
-
-            put_in_s3(table, data, current_time, s3_client)
+            data = get_original_updates(table, connection, last_updated[table])
+            put_in_s3(table, data, current_time)
             last_updated[table] = date
         else:
             logger.info(f"Table {table} does not have updates")

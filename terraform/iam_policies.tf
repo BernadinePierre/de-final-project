@@ -28,6 +28,24 @@ data "aws_iam_policy_document" "secrets_document" {
     }
 }
 
+resource "aws_iam_role_policy" "lambda_secretsmanager_policy" {
+  name = "lambda-secretsmanager-policy"
+  role = aws_iam_role.warehouse_lambda.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:eu-west-2:150327910081:secret:warehouse-db-credentials*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_policy" "secrets_policy" {
     name = "secrets-policy"
     policy = data.aws_iam_policy_document.secrets_document.json

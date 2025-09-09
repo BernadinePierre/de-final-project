@@ -3,3 +3,4 @@ venv
 .terraform*
 terraform/lambdas
 terraform/libraries
+terraform/terraform.tfvars

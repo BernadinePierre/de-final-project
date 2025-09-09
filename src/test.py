@@ -1,9 +1,7 @@
-import pandas as pd
+from ingestion_lambda import lambda_handler
 
-def ingestion_lambda_handler(event, context):
-    table = pd.DataFrame([[0, 1, 2, 3, 4], [11, 4, 1234, 45, 676]])
-    return {
-        'status_code': 200,
-        'data': table
-    }
-
+if __name__ == "__main__":
+    # Fake Lambda event + context
+    event = {}
+    context = {}
+    lambda_handler(event, context)
