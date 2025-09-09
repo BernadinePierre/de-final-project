@@ -81,6 +81,17 @@ resource "aws_security_group" "warehouse_sg" {
   }
 }
 
+# Add this to your warehouse_sg
+resource "aws_security_group_rule" "rds_from_ssm" {
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  source_security_group_id = aws_security_group.lambda_sg.id
+  security_group_id = aws_security_group.warehouse_sg.id
+  description       = "Allow PostgreSQL access via Session Manager"
+}
+
 # Security group for Lambda
 resource "aws_security_group" "lambda_sg" {
 name        = "lambda-sg"
