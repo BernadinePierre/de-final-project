@@ -19,5 +19,5 @@ variable "python_version" {
     default = "python3.13"
 }
 
-variable "warehouse_username" {}
-variable "warehouse_password" {sensitive = true}
+variable warehouse_username {}
+variable warehouse_password {sensitive = true}

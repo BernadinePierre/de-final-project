@@ -91,8 +91,33 @@ name        = "lambda-sg"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks              = ["0.0.0.0/0"]  # Only needed for interface endpoint outbound
   }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks              = ["0.0.0.0/0"]  # Only needed for interface endpoint outbound
+  }
+}
+
+resource "aws_vpc_endpoint" "secretsmanager" {
+  vpc_id            = aws_vpc.rds_vpc.id
+  service_name      = "com.amazonaws.eu-west-2.secretsmanager"
+  vpc_endpoint_type = "Interface"
+  private_dns_enabled = true
+
+  # Subnets where the Lambda is deployed
+  subnet_ids = [
+    aws_subnet.private_a.id,
+    aws_subnet.private_b.id
+  ]
+
+  # Security group allowing Lambda to reach the endpoint
+  security_group_ids = [
+    aws_security_group.lambda_sg.id
+  ]
 }
 
 # RDS instance
@@ -103,8 +128,8 @@ resource "aws_db_instance" "warehouse" {
   allocated_storage      = 25
   db_name                = "warehouse"
 
-  username               = var.warehouse_username
-  password               = var.warehouse_password
+  username             = var.warehouse_username
+  password             = var.warehouse_password
 
   vpc_security_group_ids = [aws_security_group.warehouse_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.warehouse-subnet-group.name
