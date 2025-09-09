@@ -25,6 +25,20 @@ WAREHOUSE_TABLES = [
     'sales_order'
 ]
 
+PRIMARY_KEYS = {
+    "dim_counterparty": "counterparty_id",
+    "dim_currency": "currency_id",
+    "dim_date": "date_id",
+    "dim_design": "design_id",
+    "dim_location": "location_id",
+    "dim_payment_type": "payment_type_id",
+    "dim_staff": "staff_id",
+    "dim_transaction": "transaction_id",
+    "payment": "payment_id",
+    "purchase_order": "purchase_order_id",
+    "sales_order": "sales_order_id"
+}
+
 def get_secret() -> dict:
     secret_name = "Project"
     region_name = "eu-west-2"
@@ -65,27 +79,41 @@ def fetch_processed_parquet(s3_client, table_name):
         logger.warning(f"No processed file found for {table_name}: {e}")
         return None
 
-def load_to_warehouse(conn, cur, table_name, df):
+def load_to_warehouse(conn, cur, table_name, df, pk):
     if df is None or df.empty:
         logger.info(f"No data for {table_name}, skipping")
         return
-    logger.info(f"Loading {table_name} into warehouse")
-    cur.execute(f"TRUNCATE TABLE {table_name} CASCADE;")
-    cols = ', '.join(df.columns)
-    placeholders = ', '.join(['%s'] * len(df.columns))
-    insert_query = f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders})"
+
+    logger.info(f"Upserting {table_name} into warehouse")
+
+    cols = list(df.columns)
+    colnames = ', '.join(cols)
+    placeholders = ', '.join(['%s'] * len(cols))
+    updates = ', '.join([f"{col} = EXCLUDED.{col}" for col in cols if col != pk])
+
+    insert_query = f"""
+        INSERT INTO {table_name} ({colnames})
+        VALUES ({placeholders})
+        ON CONFLICT ({pk})
+        DO UPDATE SET {updates};
+    """
+
     for _, row in df.iterrows():
         cur.execute(insert_query, tuple(row.values))
+
     conn.commit()
-    logger.info(f"Table {table_name} loaded successfully")
+    logger.info(f"Table {table_name} upserted successfully")
 
 def lambda_handler(event, context):
     logger.info("Starting warehousing lambda")
     s3_client = boto3.client("s3")
     conn, cur = connect_to_warehouse()
+
     for table in WAREHOUSE_TABLES:
         df = fetch_processed_parquet(s3_client, table)
-        load_to_warehouse(conn, cur, table, df)
+        pk = PRIMARY_KEYS[table]
+        load_to_warehouse(conn, cur, table, df, pk)
+
     cur.close()
     conn.close()
     logger.info("Warehousing lambda completed successfully")
