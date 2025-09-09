@@ -255,7 +255,8 @@ def make_fact_payment(payment: pd.DataFrame, date: pd.DataFrame):
 
     date['date'] = pd.to_datetime(date[['year', 'month', 'day']]).dt.date
     dates = date[['date_id', 'date']]
-    
+    dates.set_index('date', inplace=True)
+
     created = payment.join(
         dates.rename(columns={'date_id': 'c_date_id', 'date': 'created_date'}),
         on='created_date',
@@ -313,6 +314,7 @@ def make_fact_purchase_order(purchases: pd.DataFrame, date: pd.DataFrame):
 
     date['date'] = pd.to_datetime(date[['year', 'month', 'day']]).dt.date
     dates = date[['date_id', 'date']]
+    dates.set_index('date', inplace=True)
 
     created = purchases.join(
         dates.rename(columns={'date_id': 'c_date_id', 'date': 'created_date'}),
@@ -379,6 +381,7 @@ def make_fact_sales_order(sales: pd.DataFrame, date: pd.DataFrame):
 
     date['date'] = pd.to_datetime(date[['year', 'month', 'day']]).dt.date
     dates = date[['date_id', 'date']]
+    dates.set_index('date', inplace=True)
 
     created = sales.join(
         dates.rename(columns={'date_id': 'c_date_id', 'date': 'created_date'}),
