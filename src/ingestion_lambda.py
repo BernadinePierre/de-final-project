@@ -1,15 +1,13 @@
 import awswrangler as wr
 import boto3
 from botocore.exceptions import ClientError
-import json
-import pandas as pd
-import logging
 from datetime import datetime
+import json
+import logging
 import pg8000
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
 
 tables = [
     'address',
@@ -120,21 +118,7 @@ TABLE_LIST = {
     ]
 }
 
-# DATA_UPDATES = json.dumps({
-#     "address": "0000-00-00 00:00:00.0",
-#     "counterparty": "0000-00-00 00:00:00.0",
-#     "currency": "0000-00-00 00:00:00.0",
-#     "department": "0000-00-00 00:00:00.0",
-#     "design": "0000-00-00 00:00:00.0",
-#     "payment": "0000-00-00 00:00:00.0",
-#     "payment_type": "0000-00-00 00:00:00.0",
-#     "purchase_order": "0000-00-00 00:00:00.0",
-#     "sales_order": "0000-00-00 00:00:00.0",
-#     "staff": "0000-00-00 00:00:00.0",
-#     "transaction": "0000-00-00 00:00:00.0"
-# })
 DATA_UPDATES = {table: "0000-00-00 00:00:00.0" for table in TABLE_LIST.keys()}
-
 
 def get_secret() -> dict:
     secret_name = "Project"
@@ -162,8 +146,7 @@ def connect_to_original_database():
             port=database_info['port'],
             database=database_info['database'],
             user=database_info['user'],
-            password=database_info['password'],
-            #sslrootcert='SSLCERTIFICATE'
+            password=database_info['password']
         )
         logger.info(f'Database connection successful')
         return conn
@@ -217,12 +200,14 @@ def get_updates_table(client):
         )
         return json.loads(updates['Body'].read().decode('utf-8'))
 
-
 def lambda_handler(event, context):
     logger.info("Lambda ingestion job started")
 
     connection = connect_to_original_database()
     s3_client = boto3.client('s3')
+    logger.info("Checking Secrets Manager connectivity")
+    s3_client.list_secrets(MaxResults=1)
+    logger.info("Secrets Manager connection successful")
 
     last_updated = get_updates_table(s3_client)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
