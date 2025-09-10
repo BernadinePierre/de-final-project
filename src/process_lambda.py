@@ -248,10 +248,10 @@ def make_fact_payment(payment: pd.DataFrame, date: pd.DataFrame):
     payment['payment_date'] = pd.to_datetime(payment['payment_date']).dt.date
 
     payment['created_date'] = payment['created_at'].dt.date
-    payment['created_time'] = payment['created_at'].dt.time
+    payment['created_time'] = payment['created_at'].dt.strftime('%H:%M:%S.%f')
 
     payment['last_updated_date'] = payment['last_updated'].dt.date
-    payment['last_updated_time'] = payment['last_updated'].dt.time
+    payment['last_updated_time'] = payment['last_updated'].dt.strftime('%H:%M:%S.%f')
 
     date['date'] = pd.to_datetime(date[['year', 'month', 'day']]).dt.date
     dates = date[['date_id', 'date']]
@@ -307,10 +307,10 @@ def make_fact_purchase_order(purchases: pd.DataFrame, date: pd.DataFrame):
     purchases['agreed_payment_date'] = pd.to_datetime(purchases['agreed_payment_date']).dt.date
 
     purchases['created_date'] = purchases['created_at'].dt.date
-    purchases['created_time'] = purchases['created_at'].dt.time
+    purchases['created_time'] = purchases['created_at'].dt.strftime('%H:%M:%S.%f')
 
     purchases['last_updated_date'] = purchases['last_updated'].dt.date
-    purchases['last_updated_time'] = purchases['last_updated'].dt.time
+    purchases['last_updated_time'] = purchases['last_updated'].dt.strftime('%H:%M:%S.%f')
 
     date['date'] = pd.to_datetime(date[['year', 'month', 'day']]).dt.date
     dates = date[['date_id', 'date']]
@@ -374,10 +374,10 @@ def make_fact_sales_order(sales: pd.DataFrame, date: pd.DataFrame):
     sales['agreed_delivery_date'] = pd.to_datetime(sales['agreed_delivery_date']).dt.date
 
     sales['created_date'] = sales['created_at'].dt.date
-    sales['created_time'] = sales['created_at'].dt.time
+    sales['created_time'] = sales['created_at'].dt.strftime('%H:%M:%S.%f')
 
     sales['last_updated_date'] = sales['last_updated'].dt.date
-    sales['last_updated_time'] = sales['last_updated'].dt.time
+    sales['last_updated_time'] = sales['last_updated'].dt.strftime('%H:%M:%S.%f')
 
     date['date'] = pd.to_datetime(date[['year', 'month', 'day']]).dt.date
     dates = date[['date_id', 'date']]
