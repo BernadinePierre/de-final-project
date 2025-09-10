@@ -439,8 +439,7 @@ def make_fact_sales_order(sales: pd.DataFrame, date: pd.DataFrame):
 def lambda_handler(event, context):
     logger.info('Starting lambda')
 
-    update_data = json.loads(event['body'])
-    updates = update_data['updates']
+    updates = event['updates']
 
     dimensions = {}
     facts = {}
@@ -482,7 +481,8 @@ def lambda_handler(event, context):
     
     lambda_client = boto3.client('lambda')
     lambda_client.invoke(
-        FunctionName='warehousing_lambda'
+        FunctionName='warehousing_lambda',
+        InvocationType='Event'
     )
 
 if __name__ == '__main__':

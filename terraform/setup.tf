@@ -74,7 +74,7 @@ resource "aws_lambda_function" "ingestion" {
         log_group = aws_cloudwatch_log_group.ingestion_lambda_logs.name
     }
 
-    timeout = 60
+    timeout = 300
 }
 
 # --- PROCESS LAMBDA ---
@@ -114,7 +114,8 @@ resource "aws_lambda_function" "processing" {
         log_group  = aws_cloudwatch_log_group.process_lambda_logs.name
     }
 
-    timeout = 60
+    memory_size = 512
+    timeout = 300
 }
 
 # --- WAREHOUSE LAMBDA ---
