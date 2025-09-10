@@ -89,11 +89,6 @@ This pipeline enables a robust ETL workflow, supporting analytics on business op
 
 **Execution:** Triggered manually or via EventBridge schedule.
 
-**Potential Improvements:**
-
-* Standardize timestamp formatting (`YYYY-MM-DDTHH-MM-SS`).
-* Add retry logic and stronger exception handling.
-* Move bucket/secret names to environment variables.
 
 ---
 
@@ -109,12 +104,6 @@ This pipeline enables a robust ETL workflow, supporting analytics on business op
 * Splits timestamps into `date` and `time` components.
 
 **Execution:** Triggered by S3 event on new CSV ingestion or manually.
-
-**Potential Improvements:**
-
-* Batch larger datasets for performance.
-* Add schema validation.
-* Improve handling of inconsistent filenames.
 
 ---
 
@@ -135,11 +124,6 @@ This pipeline enables a robust ETL workflow, supporting analytics on business op
 
 **Execution:** Triggered by S3 events on processed bucket or manually.
 
-**Potential Improvements:**
-
-* Reuse DB connections for efficiency.
-* Validate schemas before load.
-* Increase chunksize for large tables.
 
 ---
 
@@ -195,9 +179,5 @@ This pipeline enables a robust ETL workflow, supporting analytics on business op
 * **Error Handling:** Implement retries and failover where possible.
 
 ---
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
 
 
