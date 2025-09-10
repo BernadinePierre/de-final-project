@@ -1,7 +1,6 @@
 import boto3
 from botocore.exceptions import ClientError
 import pandas as pd
-import pandasql as ps
 import logging
 from io import StringIO, BytesIO
 import json

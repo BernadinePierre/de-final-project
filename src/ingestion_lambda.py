@@ -205,9 +205,6 @@ def lambda_handler(event, context):
 
     connection = connect_to_original_database()
     s3_client = boto3.client('s3')
-    logger.info("Checking Secrets Manager connectivity")
-    s3_client.list_secrets(MaxResults=1)
-    logger.info("Secrets Manager connection successful")
 
     last_updated = get_updates_table(s3_client)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
