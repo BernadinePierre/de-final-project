@@ -72,6 +72,21 @@ resource "aws_iam_policy" "s3_data_updates_policy" {
     policy = data.aws_iam_policy_document.s3_data_updates_document.json
 }
 
+# --- LAMBDA INVOKE POLICIES ---
+
+data "aws_iam_policy_document" "lambda_invoke_document" {
+    statement {
+        actions = ["lambda:InvokeFunction"]
+        
+        resources = ["*"]
+    }
+}
+
+resource "aws_iam_policy" "lambda_invoke_policy" {
+    name = "lambda-invocation-policy"
+    policy = data.aws_iam_policy_document.lambda_invoke_document.json
+}
+
 # --- INGEST POLICIES ---
 
 data "aws_iam_policy_document" "s3_ingest_document" {
