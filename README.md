@@ -1,173 +1,203 @@
-# The Data Engineering Project
+# Crigglestone Data Pipeline
 
-**Read this document carefully - it contains (almost) all you need to know about the project!**
+**Read this document carefully – it describes the architecture, components, and usage of the pipeline.**
 
 ## Objective
 
-The project phase is intended to allow you to showcase some of the skills and knowledge you have acquired over the past few weeks. You will create applications that will Extract, Transform, and Load data from a prepared source into a data lake and warehouse hosted in AWS. Your solution should be reliable, resilient, and (as far as possible) deployed and managed in code.
+The Crigglestone Data Pipeline is designed to ingest, transform, and load data into a PostgreSQL data warehouse hosted on AWS. It demonstrates key data engineering practices including ETL automation, star schema modelling, cloud infrastructure, monitoring, and best practices in Python development.
 
-By the end of the project, you should have:
+By the end of the pipeline setup, you will have:
 
-- written some applications in Python that interact with AWS and database infrastructure and manipulate data as required
-- remodelled data into a data warehouse hosted in AWS
-- demonstrated that your project is well-monitored and that you can measure its performance
-- deployed at least part of the project using scripting or automation.
+* Ingested raw operational data from a PostgreSQL source into an immutable S3 data lake.
+* Transformed this data into dimension and fact tables aligned with a star schema.
+* Loaded transformed data into a PostgreSQL data warehouse for analytics.
+* Exported table previews to S3 for verification and lightweight reporting.
+* Demonstrated monitoring and logging via AWS CloudWatch.
 
-Your solution should showcase your knowledge of Python, SQL, database modelling, AWS, good operational practices, and Agile working.
+The solution showcases knowledge of Python, SQL, AWS services, and data engineering workflows.
 
-## The Minimum Viable Product (MVP)
+---
 
-The intention is to create a data platform that extracts data from an operational database (and potentially other sources), archives it in a data lake, and makes it available in a remodelled OLAP data warehouse.
+## Overview
 
-The project is open-ended and could include any number of features, but **at a minimum**, you should seek to deliver the following:
+The pipeline consists of **three AWS Lambda functions**:
 
-- Two S3 buckets (one for ingested data and one for processed data). Both buckets should be structured and well-organised so that data is easy to find. Data should be **immutable** - i.e. once you have written data to S3, it should not be amended or over-written. You should create new data files containing additions or amendments.
-- A Python application that continually ingests all tables from the `totesys` database (details below). The data should be saved in files in the "ingestion" S3 bucket in a suitable format. The application must:
-  - operate automatically on a schedule
-  - log progress to Cloudwatch
-  - trigger email alerts in the event of failures
-  - follow good security practices (for example, preventing SQL injection and maintaining password security)
-- A Python application that remodels **at least some** of the data into a predefined schema suitable for a data warehouse and stores the data in Parquet format in the "processed" S3 bucket. The application must:
-  - trigger automatically when it detects the completion of an ingested data job
-  - be adequately logged and monitored
-  - populate the dimension and fact tables of a single "star" schema in the warehouse (see details below)
-- A Database to serve as your data warehouse.
-- A Python application that loads the data into a prepared data warehouse at defined intervals. Again the application should be adequately logged and monitored.
-- A visual presentation that allows users to view useful data in the warehouse (more on this below).
+1. **Ingest Lambda**
+   Extracts updated data from a source PostgreSQL database and stores it as CSV files in an ingestion S3 bucket.
 
-All Python code should be thoroughly tested, PEP8 compliant, and tested for security vulnerabilities with the `pip-audit` and `bandit` packages. Test coverage should exceed 90%.
+2. **Transform Lambda**
+   Reads CSVs from the ingest bucket, transforms them into dimensional and fact tables, and writes them as Parquet files into a processed S3 bucket.
 
-As far as possible, the project should be deployed automatically using infrastucture-as-code and CI/CD techniques.
+3. **Load Lambda**
+   Loads Parquet files into a PostgreSQL data warehouse and exports table previews to another S3 bucket.
 
-You should be able to demonstrate that a change to the source database will be reflected in the data warehouse **within 30 minutes at most**.
+This pipeline enables a robust ETL workflow, supporting analytics on business operations data.
 
-## The Data
+---
 
-The primary data source for the project is a moderately complex (but not very large) database called `totesys` which is meant to simulate the back-end data of a commercial application. Data is inserted and updated into this database several times a day. (The data itself is entirely fake and meaningless, as a brief inspection will confirm.)
+## Prerequisites
 
-Each project team will be given read-only access credentials to this database. The full ERD for the database is detailed [here](https://dbdiagram.io/d/6332fecf7b3d2034ffcaaa92).
+### AWS
 
-In addition, you will be required to create the data warehouse and host this on your teams chosen AWS account. The data will have to be remodelled for this warehouse into three overlapping star schemas. You can find the ERDs for these star schemas:
+* AWS Lambda
+* Amazon S3
+* AWS Secrets Manager
+* Amazon RDS (PostgreSQL)
 
-- ["Sales" schema](https://dbdiagram.io/d/637a423fc9abfc611173f637)
-- ["Purchases" schema](https://dbdiagram.io/d/637b3e8bc9abfc61117419ee)
-- ["Payments" schema](https://dbdiagram.io/d/637b41a5c9abfc6111741ae8)
+### Python Libraries (included in deployment packages)
 
-The overall structure of the resulting data warehouse is shown [here](https://dbdiagram.io/d/63a19c5399cb1f3b55a27eca).
+* `awswrangler`
+* `pg8000`
+* `boto3`
+* `pandas`
+* `pandasql`
 
-The tables to be ingested from `totesys` are:
-|tablename|
-|----------|
-|counterparty|
-|currency|
-|department|
-|design|
-|staff|
-|sales_order|
-|address|
-|payment|
-|purchase_order|
-|payment_type|
-|transaction|
+### S3 Buckets
 
-The list of tables in the complete warehouse is:
-|tablename|
-|---------|
-|fact_sales_order|
-|fact_purchase_orders|
-|fact_payment|
-|dim_transaction|
-|dim_staff|
-|dim_payment_type|
-|dim_location|
-|dim_design|
-|dim_date|
-|dim_currency|
-|dim_counterparty|
+* **`nc-crigglestone-ingest-bucket`**: stores ingested CSV files.
+* **`nc-crigglestone-processed-bucket`**: stores transformed Parquet files.
+* **`nc-crigglestone-lambda-bucket`**: stores update-tracking JSON and exported CSV previews.
 
-However, for your minimum viable product, you need only populate the following:
-|tablename|
-|---------|
-|fact_sales_order|
-|dim_staff|
-|dim_location|
-|dim_design|
-|dim_date|
-|dim_currency|
-|dim_counterparty|
+### Secrets Manager
 
-This should be sufficient for a single [star-schema](https://dbdiagram.io/d/637a423fc9abfc611173f637).
+* **`Project`**: credentials for the source database.
+* **`warehouse-db-credentials`**: credentials for the warehouse database.
 
-The structure of your "processed" S3 data should reflect these tables.
+### Databases
 
-Note that data types in some columns may have to be changed to conform to the warehouse data model.
+* **Source Database**: PostgreSQL with operational tables.
+* **Warehouse Database**: PostgreSQL schema for dimensional and fact tables.
 
-### History
+---
 
-Your warehouse should contain a full history of all updates to _facts_. For example, if a sales order is
-created in `totesys` and then later updated (perhaps the `units_sold` field is changed), you should have _two_
-records in the `fact_sales_order` table. It should be possible to see both the original and changed number
-of `units_sold`. It should be possible to query either the current state of the sale, or get a full history
-of how it has evolved.
+## Lambda Functions
 
-It is _not_ necessary to do this for dimensions (which should not change very much anyway). The warehouse
-should just have the latest version of the dimension values. However, you might want to keep a full
-record of changes to dimensions in the S3 buckets.
+### 1. Ingest Lambda
 
-## Visualisation
+**Purpose:** Extracts updated rows from the source PostgreSQL database into CSV files in the ingest bucket.
 
-To demonstrate the use of the warehouse, you will be required to display some of the data in an application
-that can read data in real-time from the warehouse. Examples of such applications could be:
+**Key Features:**
 
-- a BI dashboard, such as [AWS Quicksight](https://aws.amazon.com/quicksight/). Alternatives include the
-  free tiers of well-known tools such as [Power BI](https://www.microsoft.com/en-gb/power-platform/products/power-bi)
-  or [Tableau](https://www.tableau.com/en-gb). There is also the open-source [Superset](https://superset.apache.org/)
-  tool.
-- a Jupyter notebook containing graphical elements from a library such as [matplotlib](https://matplotlib.org/)
-  or [Seaborn](https://seaborn.pydata.org/)
-- a [Shiny app](https://shiny.posit.co/) or [Steamlit](https://streamlit.io/) front-end.
+* Defines 11 source tables (address, counterparty, currency, etc.).
+* Uses Secrets Manager to retrieve credentials.
+* Tracks incremental updates with `update_tracking.json`.
+* Stores data in S3 under structured paths:
 
-This aspect of the project should not be tackled until you have data arriving in your data warehouse. The major focus of your initial efforts should be to get the data into the data warehouse.
+  ```
+  s3://nc-crigglestone-ingest-bucket/{table}/{timestamp}.csv
+  ```
 
-![img](./mvp.png)
+**Execution:** Triggered manually or via EventBridge schedule.
 
-## Technical Details
+**Potential Improvements:**
 
-To host your solution, each team will need to host your infrastructure in a single AWS account. You can use one
-of your Northcoders accounts and give each member of your team credentials to access this. You will probably
-need to deploy the infrastructure several times before it is correct,
-so it is in your interest to ensure that you can automate the creation of the resources so that they can be
-rebuilt as quickly and efficiently as possible.
+* Standardize timestamp formatting (`YYYY-MM-DDTHH-MM-SS`).
+* Add retry logic and stronger exception handling.
+* Move bucket/secret names to environment variables.
 
-### Required Components
+---
 
-You need to create:
+### 2. Transform Lambda
 
-1. A job scheduler or orchestration process to run the ingestion job and subsequent processes. You can
-   do this with AWS Eventbridge or with a combination of Eventbridge and AWS Step Functions. Since data has to be visible in the data warehouse within 30 minutes of being written to the database, you need to schedule your job to check for changes frequently.
-1. An S3 bucket that will act as a "landing zone" for ingested data.
-1. A Python application to check for changes to the database tables and ingest any new or updated data. It is **strongly** recommended that you use AWS Lambda as your computing solution. It is possible to use other computing tools, but it will probably be _much_ harder to orchestrate, monitor and deploy. **We would also advise you to store lambda/layer code in an S3 bucket rather than local zip files, you can read a bit more about the benefits of using S3 in [this blogpost](https://aws.amazon.com/blogs/compute/new-deployment-options-for-aws-lambda/).** The data should be saved in the "ingestion" S3 bucket in a suitable format. Status and error messages should be logged to Cloudwatch.
-1. A Cloudwatch alert should be generated in the event of a major error - this should be sent to email.
-1. A second S3 bucket for "processed" data.
-1. A Python application to transform data landing in the "ingestion" S3 bucket and place the results in the "processed" S3 bucket. The data should be transformed to conform to the warehouse schema (see above). The job should be triggered by either an S3 event triggered when data lands in the ingestion bucket, or on a schedule. Again, status and errors should be logged to Cloudwatch, and an alert triggered if a serious error occurs.
-1. A Database to serve as your data warehouse.
-1. A Python application that will periodically schedule an update of the data warehouse from the data in S3. Again, status and errors should be logged to Cloudwatch, and an alert triggered if a serious error occurs.
-1. A simple visualisation such as described above. In practice, this will mean creating SQL queries to answer common business questions. Depending on the complexity of your visualisation tool, other coding may be required too.
+**Purpose:** Transforms raw CSVs into star schema tables and stores them as Parquet in the processed bucket.
 
-## Extensions
+**Key Features:**
 
-Once you've completed the MVP, you can enhance it:
+* Creates dimension tables (`dim_location`, `dim_counterparty`, `dim_currency`, `dim_design`, `dim_payment_type`, `dim_staff`, `dim_transaction`, `dim_date`).
+* Creates fact tables (`fact_payment`, `fact_purchase_order`, `fact_sales_order`).
+* Deduplicates records and performs joins between source tables.
+* Splits timestamps into `date` and `time` components.
 
-1. Serve your processed data over an EC2 hosted FastAPI
-1. Add a machine learning model which classifies and labels your processed data
-1. Ingest data from an external API - eg you could retrieve relevant daily foreign exchange rates from `https://github.com/fawazahmed0/exchange-api`. You can use the `requests` library to make the request and then save the results in S3.
-1. Ingest data from a file source - eg another S3 bucket. We can provide JSON files in a remote S3 bucket that
-   can be fetched at intervals.
+**Execution:** Triggered by S3 event on new CSV ingestion or manually.
 
-## Finally...
+**Potential Improvements:**
 
-This is a fairly realistic simulation of a typical data engineering project. In the real world, such a project would be undertaken over several weeks by a team of experienced data engineers. You will have an opportunity to tackle lots of the typical problems faced in a real project and put your skills in Python, data, and DevOps to good use. As always, the journey is more important than the destination.
+* Batch larger datasets for performance.
+* Add schema validation.
+* Improve handling of inconsistent filenames.
 
-**Above all, don't rush**: it will be better to deliver a high-quality MVP than a more complex but poorly-engineered platform.
+---
 
-Enjoy this! And good luck!
+### 3. Load Lambda
+
+**Purpose:** Loads transformed Parquet data into the warehouse and exports CSV previews to S3.
+
+**Key Features:**
+
+* Retrieves warehouse credentials from Secrets Manager.
+* Loads Parquet files into PostgreSQL (`public` schema).
+* Logs table previews (first 10 rows) in CloudWatch.
+* Exports full tables to:
+
+  ```
+  s3://nc-crigglestone-lambda-bucket/extracts/{table}.csv
+  ```
+
+**Execution:** Triggered by S3 events on processed bucket or manually.
+
+**Potential Improvements:**
+
+* Reuse DB connections for efficiency.
+* Validate schemas before load.
+* Increase chunksize for large tables.
+
+---
+
+## Setup Instructions
+
+1. **Create S3 Buckets**
+
+   * `nc-crigglestone-ingest-bucket`
+   * `nc-crigglestone-processed-bucket`
+   * `nc-crigglestone-lambda-bucket`
+
+2. **Configure Secrets Manager**
+
+   * `Project` for source DB.
+   * `warehouse-db-credentials` for warehouse DB.
+
+3. **Set Up Databases**
+
+   * Source PostgreSQL with operational tables.
+   * Warehouse PostgreSQL with dimension/fact schema.
+
+4. **Deploy Lambda Functions**
+
+   * Package code + dependencies.
+   * Deploy via AWS CLI/console/CI-CD.
+   * Configure triggers:
+
+     * Ingest: scheduled (EventBridge).
+     * Transform: S3 event on ingest bucket.
+     * Load: S3 event on processed bucket.
+
+5. **Test the Pipeline**
+
+   * Trigger Ingest → verify CSV in ingest bucket.
+   * Trigger Transform → verify Parquet in processed bucket.
+   * Trigger Load → verify warehouse tables and CSV exports.
+
+---
+
+## Usage
+
+* **Running:** Start with Ingest Lambda; others trigger automatically if events are configured.
+* **Monitoring:** Use CloudWatch Logs for execution details and errors.
+* **Verification:** Check exported CSV previews in the extracts folder.
+
+---
+
+## Notes
+
+* **Schema Consistency:** Source DB must match expected table list.
+* **Performance:** Use batching or Glue for very large datasets.
+* **Security:** Restrict IAM permissions to least-privilege.
+* **Error Handling:** Implement retries and failover where possible.
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+
