@@ -34,3 +34,8 @@ resource "aws_iam_role_policy_attachment" "process_lambda_cw_policy_attachment" 
     role = aws_iam_role.process_lambda.name
     policy_arn = aws_iam_policy.cw_policy.arn
 }
+
+resource "aws_iam_role_policy_attachment" "process_lambda_invoke_policy_attachment" {
+    role = aws_iam_role.process_lambda.name
+    policy_arn = aws_iam_policy.lambda_invoke_policy.arn
+}
