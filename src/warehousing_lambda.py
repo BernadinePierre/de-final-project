@@ -47,6 +47,7 @@ def connect_to_warehouse():
 
 def load_parquet_to_warehouse(key):
     table_name = key.replace("dim-", "").replace("fact-","").replace(".parquet", "")
+    table_name = table_name.replace("-", "_")
 
     logger.info(f"Loading file {key} into table {table_name}")
     
