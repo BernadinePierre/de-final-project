@@ -439,7 +439,7 @@ def make_fact_sales_order(sales: pd.DataFrame, date: pd.DataFrame):
 def lambda_handler(event, context):
     logger.info('Starting lambda')
 
-    update_data = json.loads(context)
+    update_data = json.loads(event['body'])
     updates = update_data['updates']
 
     dimensions = {}
