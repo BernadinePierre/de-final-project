@@ -113,6 +113,16 @@ data "aws_iam_policy_document" "s3_ingest_readonly_document" {
             "${aws_s3_bucket.ingest_bucket.arn}/*"
         ]
     }
+
+    statement {
+        actions = [
+            "s3:ListBucket"
+        ]
+
+        resources = [
+            "${aws_s3_bucket.ingest_bucket.arn}",
+        ]
+    }
 }
 
 resource "aws_iam_policy" "s3_ingest_policy" {

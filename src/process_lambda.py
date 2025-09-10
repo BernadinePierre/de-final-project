@@ -481,7 +481,8 @@ def lambda_handler(event, context):
     
     lambda_client = boto3.client('lambda')
     lambda_client.invoke(
-        FunctionName='warehousing_lambda'
+        FunctionName='warehousing_lambda',
+        InvocationType='Event'
     )
 
 if __name__ == '__main__':
