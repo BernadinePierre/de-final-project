@@ -205,13 +205,11 @@ def lambda_handler(event, context):
 
     connection = connect_to_original_database()
     s3_client = boto3.client('s3')
-    logger.info("Checking Secrets Manager connectivity")
-    s3_client.list_secrets(MaxResults=1)
-    logger.info("Secrets Manager connection successful")
 
     last_updated = get_updates_table(s3_client)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     logger.info(f"Creating files at time {current_time}")
+    updated_list = []
 
     for table in TABLE_LIST.keys():
         logger.info(f'Starting table {table}')
@@ -222,6 +220,7 @@ def lambda_handler(event, context):
             data = get_original_updates(table, connection, last_updated[table])
             put_in_s3(table, data, current_time)
             last_updated[table] = date
+            updated_list.append(table)
         else:
             logger.info(f"Table {table} does not have updates")
     
@@ -231,4 +230,17 @@ def lambda_handler(event, context):
         Key='update_tracking.json',
         Body=json.dumps(last_updated)
     )
+
+    if len(updated_list) > 0:
+        logger.info('Calling process_lambda')
+
+        lambda_client = boto3.client('lambda')
+        lambda_client.invoke(
+            FunctionName='process_lambda',
+            InvocationType='Event',
+            Payload=json.dumps({'updates': updated_list})
+        )
+    else:
+        logger.info('No updates, ending here')
+
     logger.info('Lambda ingestion completed')

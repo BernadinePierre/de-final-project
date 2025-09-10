@@ -1,9 +1,9 @@
 import boto3
 from botocore.exceptions import ClientError
 import pandas as pd
-import pandasql as ps
 import logging
 from io import StringIO, BytesIO
+import json
 
 
 logger = logging.getLogger()
@@ -248,10 +248,10 @@ def make_fact_payment(payment: pd.DataFrame, date: pd.DataFrame):
     payment['payment_date'] = pd.to_datetime(payment['payment_date']).dt.date
 
     payment['created_date'] = payment['created_at'].dt.date
-    payment['created_time'] = payment['created_at'].dt.time
+    payment['created_time'] = payment['created_at'].dt.strftime('%H:%M:%S.%f')
 
     payment['last_updated_date'] = payment['last_updated'].dt.date
-    payment['last_updated_time'] = payment['last_updated'].dt.time
+    payment['last_updated_time'] = payment['last_updated'].dt.strftime('%H:%M:%S.%f')
 
     date['date'] = pd.to_datetime(date[['year', 'month', 'day']]).dt.date
     dates = date[['date_id', 'date']]
@@ -307,10 +307,10 @@ def make_fact_purchase_order(purchases: pd.DataFrame, date: pd.DataFrame):
     purchases['agreed_payment_date'] = pd.to_datetime(purchases['agreed_payment_date']).dt.date
 
     purchases['created_date'] = purchases['created_at'].dt.date
-    purchases['created_time'] = purchases['created_at'].dt.time
+    purchases['created_time'] = purchases['created_at'].dt.strftime('%H:%M:%S.%f')
 
     purchases['last_updated_date'] = purchases['last_updated'].dt.date
-    purchases['last_updated_time'] = purchases['last_updated'].dt.time
+    purchases['last_updated_time'] = purchases['last_updated'].dt.strftime('%H:%M:%S.%f')
 
     date['date'] = pd.to_datetime(date[['year', 'month', 'day']]).dt.date
     dates = date[['date_id', 'date']]
@@ -374,10 +374,10 @@ def make_fact_sales_order(sales: pd.DataFrame, date: pd.DataFrame):
     sales['agreed_delivery_date'] = pd.to_datetime(sales['agreed_delivery_date']).dt.date
 
     sales['created_date'] = sales['created_at'].dt.date
-    sales['created_time'] = sales['created_at'].dt.time
+    sales['created_time'] = sales['created_at'].dt.strftime('%H:%M:%S.%f')
 
     sales['last_updated_date'] = sales['last_updated'].dt.date
-    sales['last_updated_time'] = sales['last_updated'].dt.time
+    sales['last_updated_time'] = sales['last_updated'].dt.strftime('%H:%M:%S.%f')
 
     date['date'] = pd.to_datetime(date[['year', 'month', 'day']]).dt.date
     dates = date[['date_id', 'date']]
@@ -439,33 +439,51 @@ def make_fact_sales_order(sales: pd.DataFrame, date: pd.DataFrame):
 def lambda_handler(event, context):
     logger.info('Starting lambda')
 
+    update_data = json.loads(context)
+    updates = update_data['updates']
+
     dimensions = {}
     facts = {}
     
     s3_client = boto3.client('s3')
 
-    payment = get_from_ingest(s3_client, 'payment')
-    purchase_order = get_from_ingest(s3_client, 'purchase_order')
-    sales_order = get_from_ingest(s3_client, 'sales_order')
+    if 'counterparty' in updates:
+        dimensions['dim_counterparty'] = make_dim_counterparty(s3_client)
+    if 'currency' in updates:
+        dimensions['dim_currency'] = make_dim_currency(s3_client)
+    if 'design' in updates:
+        dimensions['dim_design'] = make_dim_design(s3_client)
+    if 'address' in updates:
+        dimensions['dim_location'] = make_dim_location(s3_client)
+    if 'payment_type' in updates:
+        dimensions['dim_payment_type'] = make_dim_payment_type(s3_client)
+    if 'staff' in updates or 'department' in updates:
+        dimensions['dim_staff'] = make_dim_staff(s3_client)
+    if 'transaction' in updates:
+        dimensions['dim_transaction'] = make_dim_transaction(s3_client)
 
-    dimensions['dim_counterparty'] = make_dim_counterparty(s3_client)
-    dimensions['dim_currency'] = make_dim_currency(s3_client)
-    dimensions['dim_date'] = make_dim_dates(payment, purchase_order, sales_order)
-    dimensions['dim_design'] = make_dim_design(s3_client)
-    dimensions['dim_location'] = make_dim_location(s3_client)
-    dimensions['dim_payment_type'] = make_dim_payment_type(s3_client)
-    dimensions['dim_staff'] = make_dim_staff(s3_client)
-    dimensions['dim_transaction'] = make_dim_transaction(s3_client)
-
-    facts['fact_payment'] = make_fact_payment(payment, dimensions['dim_date'])
-    facts['fact_purchase_order'] = make_fact_purchase_order(purchase_order, dimensions['dim_date'])
-    facts['fact_sales_order'] = make_fact_sales_order(sales_order, dimensions['dim_date'])
+    if 'payment' in updates or 'purchase_order' in updates or 'sales_order' in updates:
+        payment = get_from_ingest(s3_client, 'payment')
+        purchase_order = get_from_ingest(s3_client, 'purchase_order')
+        sales_order = get_from_ingest(s3_client, 'sales_order')
+        dimensions['dim_date'] = make_dim_dates(payment, purchase_order, sales_order)
+        if 'payment' in updates:
+            facts['fact_payment'] = make_fact_payment(payment, dimensions['dim_date'])
+        if 'purchase_order' in updates:
+            facts['fact_purchase_order'] = make_fact_purchase_order(purchase_order, dimensions['dim_date'])
+        if 'sales_order' in updates:
+            facts['fact_sales_order'] = make_fact_sales_order(sales_order, dimensions['dim_date'])
 
     for table in dimensions.keys():
         put_in_processed(s3_client, table, dimensions[table])
 
     for table in facts.keys():
         put_in_processed(s3_client, table, facts[table])
+    
+    lambda_client = boto3.client('lambda')
+    lambda_client.invoke(
+        FunctionName='warehousing_lambda'
+    )
 
 if __name__ == '__main__':
     logging.getLogger().addHandler(logging.StreamHandler())

@@ -46,7 +46,9 @@ def connect_to_warehouse():
         raise
 
 def load_parquet_to_warehouse(key):
-    table_name = key.replace("processed-dim-", "").replace(".parquet", "")
+    table_name = key.replace("dim-", "").replace("fact-","").replace(".parquet", "")
+    table_name = table_name.replace("-", "_")
+
     logger.info(f"Loading file {key} into table {table_name}")
     
     s3_path = f"s3://{PROCESSED_BUCKET}/{key}"
@@ -64,8 +66,8 @@ def load_parquet_to_warehouse(key):
             table=table_name,
             con=connection,
             schema="public",        
-            mode="append",     
-            chunksize=100         
+            mode="overwrite",     
+            chunksize=1000       
         )
 
         logger.info(f"Loaded {len(processed_data)} rows into {table_name}")

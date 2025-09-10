@@ -179,3 +179,110 @@ This pipeline enables a robust ETL workflow, supporting analytics on business op
 * **Error Handling:** Implement retries and failover where possible.
 
 ---
+=======
+
+**Purpose:** Extracts updated rows from the source PostgreSQL database into CSV files in the ingest bucket.
+
+**Key Features:**
+
+* Defines 11 source tables (address, counterparty, currency, etc.).
+* Uses Secrets Manager to retrieve credentials.
+* Tracks incremental updates with `update_tracking.json`.
+* Stores data in S3 under structured paths:
+
+  ```
+  s3://nc-crigglestone-ingest-bucket/{table}/{timestamp}.csv
+  ```
+
+**Execution:** Triggered manually or via EventBridge schedule.
+
+
+---
+
+### 2. Transform Lambda
+
+**Purpose:** Transforms raw CSVs into star schema tables and stores them as Parquet in the processed bucket.
+
+**Key Features:**
+
+* Creates dimension tables (`dim_location`, `dim_counterparty`, `dim_currency`, `dim_design`, `dim_payment_type`, `dim_staff`, `dim_transaction`, `dim_date`).
+* Creates fact tables (`fact_payment`, `fact_purchase_order`, `fact_sales_order`).
+* Deduplicates records and performs joins between source tables.
+* Splits timestamps into `date` and `time` components.
+
+**Execution:** Triggered by S3 event on new CSV ingestion or manually.
+
+---
+
+### 3. Load Lambda
+
+**Purpose:** Loads transformed Parquet data into the warehouse and exports CSV previews to S3.
+
+**Key Features:**
+
+* Retrieves warehouse credentials from Secrets Manager.
+* Loads Parquet files into PostgreSQL (`public` schema).
+* Logs table previews (first 10 rows) in CloudWatch.
+* Exports full tables to:
+
+  ```
+  s3://nc-crigglestone-lambda-bucket/extracts/{table}.csv
+  ```
+
+**Execution:** Triggered by S3 events on processed bucket or manually.
+
+
+---
+
+## Setup Instructions
+
+1. **Create S3 Buckets**
+
+   * `nc-crigglestone-ingest-bucket`
+   * `nc-crigglestone-processed-bucket`
+   * `nc-crigglestone-lambda-bucket`
+
+2. **Configure Secrets Manager**
+
+   * `Project` for source DB.
+   * `warehouse-db-credentials` for warehouse DB.
+
+3. **Set Up Databases**
+
+   * Source PostgreSQL with operational tables.
+   * Warehouse PostgreSQL with dimension/fact schema.
+
+4. **Deploy Lambda Functions**
+
+   * Package code + dependencies.
+   * Deploy via AWS CLI/console/CI-CD.
+   * Configure triggers:
+
+     * Ingest: scheduled (EventBridge).
+     * Transform: S3 event on ingest bucket.
+     * Load: S3 event on processed bucket.
+
+5. **Test the Pipeline**
+
+   * Trigger Ingest → verify CSV in ingest bucket.
+   * Trigger Transform → verify Parquet in processed bucket.
+   * Trigger Load → verify warehouse tables and CSV exports.
+
+---
+
+## Usage
+
+* **Running:** Start with Ingest Lambda; others trigger automatically if events are configured.
+* **Monitoring:** Use CloudWatch Logs for execution details and errors.
+* **Verification:** Check exported CSV previews in the extracts folder.
+
+---
+
+## Notes
+
+* **Schema Consistency:** Source DB must match expected table list.
+* **Performance:** Use batching or Glue for very large datasets.
+* **Security:** Restrict IAM permissions to least-privilege.
+* **Error Handling:** Implement retries and failover where possible.
+
+---
