@@ -180,3 +180,11 @@ This pipeline enables a robust ETL workflow, supporting analytics on business op
 
 ---
 
+## Security
+
+* **Audit :** No known vulnerabilties found.
+* **Bandit:** No Hisk Risk code found
+* **TDD:** All lambdas used TDD.
+
+---
+
