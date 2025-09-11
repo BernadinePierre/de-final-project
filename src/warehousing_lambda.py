@@ -124,8 +124,7 @@ def lambda_handler(event, context):
     logger.info("Warehouse loader started")
     try:
         if 'Records' in event:
-            for record in event['Records']:
-                key = record['s3']['object']['key']
+            for key in event['Records']:
                 load_parquet_to_warehouse(key)
         else:
             # If manually triggered, optionally scan bucket for files

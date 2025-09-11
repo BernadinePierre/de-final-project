@@ -478,13 +478,16 @@ def lambda_handler(event, context):
 
     for table in facts.keys():
         put_in_processed(s3_client, table, facts[table])
+
+    new_files = list(dimensions.keys()) + list(facts.keys())
+    new_files = [file.replace("_", "-") + '.parquet' for file in new_files]
     
     lambda_client = boto3.client('lambda')
     lambda_client.invoke(
         FunctionName='warehousing_lambda',
-        InvocationType='Event'
+        InvocationType='Event',
+        Body=json.dumps({'Records': new_files})
     )
-
 if __name__ == '__main__':
     logging.getLogger().addHandler(logging.StreamHandler())
     lambda_handler({}, {})
