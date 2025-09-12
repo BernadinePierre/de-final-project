@@ -6,8 +6,11 @@ import json
 import logging
 import pg8000
 
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+logging.basicConfig(format='[%(levelname)s] %(message)s')
+
 
 tables = [
     'address',
@@ -120,6 +123,7 @@ TABLE_LIST = {
 
 DATA_UPDATES = {table: "0000-00-00 00:00:00.0" for table in TABLE_LIST.keys()}
 
+
 def get_secret() -> dict:
     secret_name = "Project"
     region_name = "eu-west-2"
@@ -136,6 +140,7 @@ def get_secret() -> dict:
     secret = get_secret_value_response['SecretString']
     secret_dict = json.loads('{'+secret+'}')
     return secret_dict['crigglestone']
+
 
 def connect_to_original_database():
     database_info = get_secret()
@@ -154,12 +159,14 @@ def connect_to_original_database():
         logger.error(f'Database connection failed due to {e}')
         raise
 
+
 def check_original_update(table_name, connection):
     logger.info('Getting latest update')
     query = f'SELECT last_updated::text AS last_updated FROM {table_name} ORDER BY last_updated DESC LIMIT 1'
     df = wr.postgresql.read_sql_query(sql=query, con=connection)
     logger.info(f'Table {table_name} last updated at {df['last_updated'].iloc[0]}')
     return df['last_updated'].iloc[0] if not df.empty else "0000-00-00 00:00:00.0"
+
 
 def get_original_updates(table_name, connection, cutoff):
     logger.info('Getting updated data')
@@ -168,11 +175,13 @@ def get_original_updates(table_name, connection, cutoff):
     logger.info('Data fetched')
     return df
 
+
 def put_in_s3(table, data, date):
     logger.info('Putting data into S3')
     path = f"s3://nc-crigglestone-ingest-bucket/{table}/{date}.csv"
     wr.s3.to_csv(df=data, path=path, index=False)
     logger.info(f'Table {table} updated into S3')
+
 
 def get_updates_table(client):
     lambda_bucket = 'nc-crigglestone-lambda-bucket'
@@ -199,6 +208,7 @@ def get_updates_table(client):
             Key=key_name
         )
         return json.loads(updates['Body'].read().decode('utf-8'))
+
 
 def lambda_handler(event, context):
     logger.info("Lambda ingestion job started")
